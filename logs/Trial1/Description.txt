@@ -1,0 +1,10 @@
+This was the first data set collected. I collected this data over multiple time periods both stationary and moving UE. 
+The mmtc includes traffic collected while driving. The urllc traffic was both stationaring and walking. The embb traffic 
+was only stationary.
+The original data contained one, two, or three of the traffic types. 
+After capturing all the data, I seperated it by class type. Next, I combined all the time periods into one file.
+Because of this, there may be time gaps when other traffic types was present. That traffic has been removed, 
+but leaves behind empty time.
+
+
+These were generated using RF scenario 1017 (Rome, close, static)

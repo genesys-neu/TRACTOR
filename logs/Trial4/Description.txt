@@ -1,0 +1,9 @@
+This uses the third data set collected. When collecting this data, I focused on a specific traffic slice. 
+In other words, for the embb traffic, I only streamed YouTube and started and stopped the traffic immediately
+before and after streaming YouTube. 
+
+I included a mixed traffic sample that has all traffic types.
+
+I also included a no traffic sample (null) that does not send any user traffic.
+
+These were all generated using RF scenario 1018 (Rome, close, moderate)

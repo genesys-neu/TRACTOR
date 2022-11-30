@@ -1,0 +1,9 @@
+When collecting this data, I focused on a specific traffic slice. I captured all trafic on 18 November.
+For the embb traffic, I streamed Netflix and started and stopped the traffic immediately
+before and after streaming Netflix. I only captured the Netflix traffic. 
+For the urllc traffic I used Facebook messenger for live video chat and voice only calls, capturing only the facebook messanger traffic.
+For the mmtc, I captured all traffic while not using the UE for anything except text messages (and background traffic).
+I captured all traffic in ISEC with no mobility. 
+
+
+These were all generated using RF scenario 1018 (Rome, close, moderate)
