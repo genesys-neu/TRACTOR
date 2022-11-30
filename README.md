@@ -1,4 +1,4 @@
-This folder is organized as follows:
+This repository is organized as follows:
 
 -logs contains the output of the data after it is played back in Colosseum. This folder has subfolders based on
 how and when I collected the data. All files in the sub folders ending in _clean have been through initial data 
