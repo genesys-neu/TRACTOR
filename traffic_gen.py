@@ -7,10 +7,10 @@ import sys
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--eNB", help="specify this is the base station", action="store_true")
-parser.add_argument("--ip", help="enter the distant end IP address", type=str)
-parser.add_argument("-eNBp", "--eNBport", help="eNB port for this instance", type=int)
-parser.add_argument("-UEp", "--UEport", help="UE port for this instance", type=int)
+parser.add_argument("-e", "--eNB", help="specify if this is the base station", action="store_true")
+parser.add_argument("-i", "--ip", help="enter the distant end IP address", type=str)
+parser.add_argument("-pb", "--port_eNB", help="eNB port for this instance", type=int)
+parser.add_argument("-pu", "--port_UE", help="UE port for this instance", type=int)
 parser.add_argument("-f", "--file", help="full path to the csv file", type=str, required=True)
 args = parser.parse_args()
 
@@ -23,11 +23,11 @@ data_size = 0
 UE = not args.eNB
 file_name = args.file
 
-if args.eNBport:
-    eNB_PORT = args.eNBport
+if args.port_eNB:
+    eNB_PORT = args.port_eNB
 
-if args.UEport:
-    UE_PORT = args.UEport
+if args.port_UE:
+    UE_PORT = args.port_UE
 
 if UE:
     local_port = UE_PORT
@@ -123,4 +123,8 @@ with open(file_name, 'r') as csvfile:
                     if data:
                         break
 
-print('Test complete!')
+print('Test completed with the following parameters:')
+print("UDP target IP: %s" % Distant_IP)
+print("UDP server port: %s" % eNB_PORT)
+print("UDP client port: %s" % UE_PORT)
+print("File used: %s" % file_name)
