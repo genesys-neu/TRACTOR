@@ -63,14 +63,14 @@ with open(file_name, 'r') as csvfile:
         if row2[3] != '172.30.1.1':
             print('eNB starts, send start message')
             send_sock.sendto(str.encode('Start'), (Distant_IP, distant_port))
+            start_time = time.time()
+            print('starting experiment')
+            print('listening for %s' % row2[1])
             # we also need to wait and listen for the first message
-            while True:
+            while time.time() - start_time < float(row2[2]):
                 data, address = rec_sock.recvfrom(4096)
                 if data:
-                    start_time = time.time()
-                    print("Starting experiment")
                     break
-
         else:
             # it is our turn to start
             data_size = int(row2[6])-70
@@ -81,16 +81,16 @@ with open(file_name, 'r') as csvfile:
 
         for row in datareader:
             if row[3] == '172.30.1.1':
-                print('It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
                     continue
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
+                print('Sending %s' % row[1])
 
             else:
                 # we should listen until we get data, or it is our turn to send again
-                print('listening')
+                print('listening for %s' % row[1])
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
                     if data:
@@ -102,21 +102,21 @@ with open(file_name, 'r') as csvfile:
         while True:
             data, address = rec_sock.recvfrom(4096)
             if data:
-                print("Starting experiment")
                 start_time = time.time()
+                print("Starting experiment")
                 break
 
         for row in datareader:
             if row[3] == '172.30.1.250':
-                print('It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
                     continue
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
+                print('Sending %s' % row[1])
 
             else:
-                print('listening')
+                print('listening for %s' % row[1])
                 # we should listen until we get data, or it is our turn to send again
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
