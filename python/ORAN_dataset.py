@@ -10,26 +10,47 @@ import pickle
 import argparse
 from glob import glob
 
-def load_csv_traces(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc'):
+def load_csv_traces(trials, data_path, norm_params=None):
+    mode = 'emuc'
+    isControlClass = True if 'c' in mode else False
+    trials_traces = []
+    for trial in trials:
+        print('Generating dataset ', trial)
+        ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset(data_path, isControlClass, trial)
+
+        # stack together all data from all traffic class
+        if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+            datasets = [embb_data, mmtc_data, urll_data, ctrl_data]
+        else:
+            datasets = [embb_data, mmtc_data, urll_data]
+
+        for ix, ds in enumerate(datasets):
+            # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
+            columns_drop = ['Timestamp', 'tx_errors downlink (%)']  # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
+            ds.drop(columns_drop, axis=1, inplace=True)
+            # normalize values
+            for ix, c in enumerate(ds.columns):
+                #print('Normalizing Col.', c, '-- Max', norm_params[ix]['max'], ', Min', norm_params[ix]['min'])
+                ds[c] = ds[c].map(lambda x: (x - norm_params[ix]['min']) / (norm_params[ix]['max'] - norm_params[ix]['min']))
+
+
+        if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+            trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data, 'ctrl': ctrl_data})
+        else:
+            trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data})
+
+    return trials_traces
+
+
+
+def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc'):
 
     isControlClass = True if 'c' in mode else False
     trials_in = []
     trials_lbl = []
     for trial in trials:
         print('Generating dataset ', trial)
-        # for each traffic type, let's load csv info using pandas
-        embb_files = glob(os.path.join(data_path, os.path.join(trial, "embb_*clean.csv")))
-        embb_data = pd.concat([pd.read_csv(f, sep=",") for f in embb_files])
-        mmtc_files = glob(os.path.join(data_path, os.path.join(trial, "mmtc_*clean.csv")))
-        mmtc_data = pd.concat([pd.read_csv(f, sep=",") for f in mmtc_files])
-        urll_files = glob(os.path.join(data_path, os.path.join(trial, "urll*_*clean.csv")))
-        urll_data = pd.concat([pd.read_csv(f, sep=",") for f in urll_files])
-        if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
-            ctrl_data = pd.read_csv(os.path.join(data_path, os.path.join(trial, "null_clean.csv")), sep=",")
-
-        # drop specific columns
-        if 'ul_rssi' in mmtc_data.columns:
-            mmtc_data = mmtc_data.drop(['ul_rssi'], axis=1)
+        ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset(data_path, isControlClass, trial)
 
         # stack together all data from all traffic class
         if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
@@ -102,11 +123,17 @@ def load_csv_traces(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode=
 
     # also create a normalized version of the features (each feature is normalized independently)
     trials_in_norm = trials_in.copy()
+
+    columns_maxmin = {}
     for c in range(trials_in_norm.shape[2]):
         col_max = trials_in_norm[:,:,c].max()
         col_min = trials_in_norm[:,:,c].min()
         print('Normalizing Col.', c, '-- Max', col_max, ', Min', col_min)
         trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
+        # store max/min values for later normalization
+        columns_maxmin[c] = {'max': col_max, 'min': col_min}
+
+
 
 
     # generate (shuffled) train and test data
@@ -149,8 +176,25 @@ def load_csv_traces(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode=
         }
     }
 
-    return trials_ds
+    return trials_ds, columns_maxmin
 
+
+def load_csv_dataset(data_path, isControlClass, trial):
+    # for each traffic type, let's load csv info using pandas
+    embb_files = glob(os.path.join(data_path, os.path.join(trial, "embb_*clean.csv")))
+    embb_data = pd.concat([pd.read_csv(f, sep=",") for f in embb_files])
+    mmtc_files = glob(os.path.join(data_path, os.path.join(trial, "mmtc_*clean.csv")))
+    mmtc_data = pd.concat([pd.read_csv(f, sep=",") for f in mmtc_files])
+    urll_files = glob(os.path.join(data_path, os.path.join(trial, "urll*_*clean.csv")))
+    urll_data = pd.concat([pd.read_csv(f, sep=",") for f in urll_files])
+    if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+        ctrl_data = pd.read_csv(os.path.join(data_path, os.path.join(trial, "null_clean.csv")), sep=",")
+    else:
+        ctrl_data = None
+    # drop specific columns
+    if 'ul_rssi' in mmtc_data.columns:
+        mmtc_data = mmtc_data.drop(['ul_rssi'], axis=1)
+    return ctrl_data, embb_data, mmtc_data, urll_data
 
 
 class ORANTracesDataset(Dataset):
@@ -206,7 +250,7 @@ if __name__ == "__main__":
 
     path = args.ds_path
     trials = args.trials
-    dataset = load_csv_traces(trials, slice_len=args.slicelen, data_path=path, mode=args.mode)
+    dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path, mode=args.mode)
 
     file_suffix = ''
     for t in trials:
@@ -218,6 +262,21 @@ if __name__ == "__main__":
     file_suffix += '_'+args.filemarker if args.filemarker else ''
 
     pickle.dump(dataset, open(os.path.join(path, 'dataset__' + args.mode + '__' +file_suffix + '.pkl'), 'wb'))
+
+    # save separately maxmin normalization parameters for each column/feature
+    norm_param_path = os.path.join(path,'cols_maxmin.pkl')
+    yes_choice = ['yes', 'y']
+    save_norm_param = True
+    if os.path.isfile(norm_param_path):
+        user_input = input("File "+norm_param_path+" exists already. Overwrite? [y/n]")
+        if not(user_input.lower() in yes_choice):
+            save_norm_param = False
+
+    if save_norm_param:
+        pickle.dump(cols_maxmin, open(norm_param_path, 'wb'))
+
+
+
 
 
 

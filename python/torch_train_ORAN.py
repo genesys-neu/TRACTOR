@@ -14,6 +14,7 @@ from ray.train.torch import TorchTrainer, TorchPredictor
 from ray.air.config import ScalingConfig
 from ray.air import session, Checkpoint
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
+from ORAN_dataset import load_csv_traces
 
 #ds_train = ORANTracesDataset('train_in__Trial1_Trial2_Trial3.pkl', 'train_lbl__Trial1_Trial2_Trial3.pkl')
 #ds_test = ORANTracesDataset('valid_in__Trial1_Trial2_Trial3.pkl', 'valid_lbl__Trial1_Trial2_Trial3.pkl')
@@ -52,7 +53,7 @@ class ConvNN(nn.Module):
         self.numChannels = numChannels
 
         # initialize first set of CONV => RELU => POOL layers
-        self.conv1 = nn.Conv2d(in_channels=numChannels, out_channels=20,
+        self.conv1 = nn.Conv2d(in_channels=numChannels, out_channels=50,
                             kernel_size=(4, 1))
         self.relu1 = nn.ReLU()
         # self.maxpool1 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 2))
@@ -258,7 +259,9 @@ if __name__ == "__main__":
     parser.add_argument("--address", required=False, type=str, help="the address to use for Ray")
     parser.add_argument("--num-workers", "-n", type=int, default=2, help="Sets number of workers for training.")
     parser.add_argument("--use-gpu", action="store_true", default=False, help="Enables GPU training")
-    parser.add_argument("--test", action="store_true", default=False, help="Testing the model")
+    parser.add_argument("--test", action="store_true", default=False, help="Testing the model") # TODO visualize capture and then perform classification after loading model
+    parser.add_argument("--cp_path", help='Path to the checkpoint to load at test time.')
+    parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
     args, _ = parser.parse_known_args()
 
     ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path)
@@ -284,12 +287,13 @@ if __name__ == "__main__":
         #debug_train_func(train_config)
     else:
 
-        cp_path = '/home/mauro/ray_results/TorchTrainer_2022-12-07_17-09-41/TorchTrainer_d9111_00000_0_2022-12-07_17-09-41/checkpoint_000199/'
+        cp_path = args.cp_path
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
         cp = Checkpoint(local_path=cp_path)
         model.load_state_dict(cp.to_dict().get("model_weights"))
+
+        """
         dataloader = DataLoader(ds_test, batch_size=128)
-        loss_fn = nn.CrossEntropyLoss()
 
         num_batches = len(dataloader)
         model.eval()
@@ -302,7 +306,8 @@ if __name__ == "__main__":
                 #test_loss += loss_fn(pred, y).item()
                 #correct += (pred.argmax(1) == y).type(torch.float).sum().item()
                 labels = pred.argmax(1)
-                # TODO find all the samples from MMTC and keep the ones that are misclassified as URLL
+                
+                #  find all the samples from MMTC and keep the ones that are misclassified as URLL
                 MMTC_cix = 1
                 mmtc_ixs = np.where(y == MMTC_cix)    # let's retrieve samples indexes in this batch that belong to the second class MMTC
                 mmtc_labels = labels[mmtc_ixs]
@@ -319,6 +324,39 @@ if __name__ == "__main__":
                 plt.imshow(np.squeeze(m[:,s,:,:]))
                 plt.colorbar()
                 plt.show()
+        """
+
+        # load normalization parameters
+        colsparam_dict = pickle.load(open(args.norm_param_path, 'rb'))
+        # load and normalize a trace input
+        traces = load_csv_traces(['Trial1', 'Trial2', 'Trial3', 'Trial4', 'Trial5', 'Trial6'], args.ds_path, norm_params=colsparam_dict)
+
+
+        print('ue')
+        t5_embb = traces[5]['embb'].values
+        t5_mmtc = traces[5]['mmtc'].values
+        t5_urllc = traces[5]['urll'].values
+        t5_ctrl = traces[5]['ctrl'].values
+
+        tr = t5_ctrl
+        for t in range(tr.shape[0]):
+            input_sample = tr[t:t + train_config['slice_len']]
+            model(torch.Tensor(
+                input_sample[np.newaxis,:,:]
+            ))
+
+        plt.figure(figsize=(30, 1))
+        plt.imshow(tr[:1000, :].T)
+        plt.show()
+
+
+
+
+
+
+
+
+
 
 
 

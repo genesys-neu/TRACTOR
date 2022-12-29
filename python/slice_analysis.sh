@@ -1,5 +1,5 @@
 #!/bin/bash
-for l in 8 16 32
+for l in 64 128 #8 16 32
 do
   for m in emuc emu # co
   do
