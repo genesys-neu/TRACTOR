@@ -7,10 +7,10 @@ import sys
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-e", "--eNB", help="specify if this is the base station", action="store_true")
-parser.add_argument("-i", "--ip", help="enter the distant end IP address", type=str)
-parser.add_argument("-pb", "--port_eNB", help="eNB port for this instance", type=int)
-parser.add_argument("-pu", "--port_UE", help="UE port for this instance", type=int)
+parser.add_argument("--eNB", help="specify this is the base station", action="store_true")
+parser.add_argument("--ip", help="enter the distant end IP address", type=str)
+parser.add_argument("-eNBp", "--eNBport", help="eNB port for this instance", type=int)
+parser.add_argument("-UEp", "--UEport", help="UE port for this instance", type=int)
 parser.add_argument("-f", "--file", help="full path to the csv file", type=str, required=True)
 args = parser.parse_args()
 
@@ -23,11 +23,11 @@ data_size = 0
 UE = not args.eNB
 file_name = args.file
 
-if args.port_eNB:
-    eNB_PORT = args.port_eNB
+if args.eNBport:
+    eNB_PORT = args.eNBport
 
-if args.port_UE:
-    UE_PORT = args.port_UE
+if args.UEport:
+    UE_PORT = args.UEport
 
 if UE:
     local_port = UE_PORT
@@ -63,14 +63,14 @@ with open(file_name, 'r') as csvfile:
         if row2[3] != '172.30.1.1':
             print('eNB starts, send start message')
             send_sock.sendto(str.encode('Start'), (Distant_IP, distant_port))
-            start_time = time.time()
-            print('starting experiment')
-            print('listening for %s' % row2[1])
             # we also need to wait and listen for the first message
-            while time.time() - start_time < float(row2[2]):
+            while True:
                 data, address = rec_sock.recvfrom(4096)
                 if data:
+                    start_time = time.time()
+                    print("Starting experiment")
                     break
+
         else:
             # it is our turn to start
             data_size = int(row2[6])-70
@@ -81,16 +81,16 @@ with open(file_name, 'r') as csvfile:
 
         for row in datareader:
             if row[3] == '172.30.1.1':
+                print('It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
                     continue
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
-                print('Sending %s' % row[1])
 
             else:
                 # we should listen until we get data, or it is our turn to send again
-                print('listening for %s' % row[1])
+                print('listening')
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
                     if data:
@@ -102,29 +102,25 @@ with open(file_name, 'r') as csvfile:
         while True:
             data, address = rec_sock.recvfrom(4096)
             if data:
-                start_time = time.time()
                 print("Starting experiment")
+                start_time = time.time()
                 break
 
         for row in datareader:
             if row[3] == '172.30.1.250':
+                print('It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
                     continue
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
-                print('Sending %s' % row[1])
 
             else:
-                print('listening for %s' % row[1])
+                print('listening')
                 # we should listen until we get data, or it is our turn to send again
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
                     if data:
                         break
 
-print('Test completed with the following parameters:')
-print("UDP target IP: %s" % Distant_IP)
-print("UDP server port: %s" % eNB_PORT)
-print("UDP client port: %s" % UE_PORT)
-print("File used: %s" % file_name)
+print('Test complete!')

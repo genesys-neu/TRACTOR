@@ -1,0 +1,19 @@
+When collecting this data, I focused on a specific traffic slice. I captured all trafic on 18 November.
+For the embb traffic, I streamed Netflix and started and stopped the traffic immediately
+before and after streaming Netflix. I only captured the Netflix traffic. 
+For the urllc traffic I used Facebook messenger for live video chat and voice only calls, capturing only the facebook messanger traffic.
+For the mmtc, I captured all traffic while not using the UE for anything except text messages (and background traffic).
+I captured all traffic in ISEC with no mobility. 
+
+
+These were all generated using RF scenario 1017. Each of these was generated with two UEs as shown below:
+
+Trial	     	Nodes	
+1	URLLC*		URLLC_11_18
+2	URLLC_2		EMBB_11_18
+3	URLLC_3		MMTC_2
+4	eMBB*		EMBB_3
+5	EMBB_2		MMTC_3
+6	mMTC*		MMTC_11_18
+
+*These outputs were moved to archive because they are the least reliable.
