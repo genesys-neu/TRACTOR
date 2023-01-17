@@ -53,7 +53,7 @@ class ConvNN(nn.Module):
         self.numChannels = numChannels
 
         # initialize first set of CONV => RELU => POOL layers
-        self.conv1 = nn.Conv2d(in_channels=numChannels, out_channels=50,
+        self.conv1 = nn.Conv2d(in_channels=numChannels, out_channels=20,
                             kernel_size=(4, 1))
         self.relu1 = nn.ReLU()
         # self.maxpool1 = nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 2))
@@ -249,6 +249,29 @@ def train_ORAN_ds(num_workers=2, use_gpu=False):
     print(f"Results: {result.metrics}")
 
 
+def timing_inference_GPU(dummy_input, model):
+    # INIT LOGGERS
+    starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    repetitions = 300
+    timings = np.zeros((repetitions, 1))
+    # GPU-WARM-UP
+    for _ in range(10):
+        _ = model(dummy_input)
+    # MEASURE PERFORMANCE
+    with torch.no_grad():
+        for rep in range(repetitions):
+            starter.record()
+            _ = model(dummy_input)
+            ender.record()
+            # WAIT FOR GPU SYNC
+            torch.cuda.synchronize()
+            curr_time = starter.elapsed_time(ender)
+            timings[rep] = curr_time
+
+    mean_syn = np.sum(timings) / repetitions
+    std_syn = np.std(timings)
+    return mean_syn, std_syn
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -291,6 +314,12 @@ if __name__ == "__main__":
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
         cp = Checkpoint(local_path=cp_path)
         model.load_state_dict(cp.to_dict().get("model_weights"))
+
+        # save a new model state using torch functions to allow loading model into gpu
+        device = torch.device("cuda")
+        torch.save(model.state_dict(), 'cpu_model.pt')
+        model.load_state_dict(torch.load('cpu_model.pt', map_location='cuda:0'))
+        model.to(device)
 
         """
         dataloader = DataLoader(ds_test, batch_size=128)
@@ -341,9 +370,11 @@ if __name__ == "__main__":
         tr = t5_ctrl
         for t in range(tr.shape[0]):
             input_sample = tr[t:t + train_config['slice_len']]
-            model(torch.Tensor(
-                input_sample[np.newaxis,:,:]
-            ))
+            input = torch.Tensor(input_sample[np.newaxis, :, :])
+            input = input.to(device)    # transfer input data to GPU
+            pred = model(input)
+            class_ix = pred.argmax(1)
+            mean, stddev = timing_inference_GPU(input, model)
 
         plt.figure(figsize=(30, 1))
         plt.imshow(tr[:1000, :].T)
