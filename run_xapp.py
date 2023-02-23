@@ -14,7 +14,8 @@ def main():
     logging.getLogger('').addHandler(console)
 
     control_sck = open_control_socket(4200)
-    kpi = np.empty(19)
+    # initialize the KPI matrix (4 samples, 19 KPIs each)
+    kpi = np.empty([4, 19])
 
     while True:
         data_sck = receive_from_socket(control_sck)
@@ -30,12 +31,15 @@ def main():
                 f.write('{}\n'.format(data_sck))
 
             kpi_new = np.fromstring(data_sck, sep=',')
-            if kpi_new[0] > kpi[0]:
-                kpi = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
+            # check to see if the recently received KPI is actually new
+            if kpi_new[0] > kpi[(3, 0)]:
+                # roll all KPIs up one
+                kpi = np.roll(kpi, -1, axis=0)
+                # update the last row with the new KPIs
+                kpi[3, :] = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
                 with open('/home/kpi_log.txt', 'a') as f:
                     f.write('{}\n'.format(kpi))
 
 
 if __name__ == '__main__':
     main()
-
