@@ -9,10 +9,6 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 from ORAN_dataset import *
 
-import ray.train as train
-from ray.train.torch import TorchTrainer, TorchPredictor
-from ray.air.config import ScalingConfig
-from ray.air import session, Checkpoint
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from ORAN_dataset import load_csv_traces
 
@@ -65,7 +61,7 @@ class ConvNN(nn.Module):
         ## initialize first (and only) set of FC => RELU layers
 
         # pass a random input
-        rand_x = torch.Tensor(np.random.random((1, slice_len, num_feats)))
+        rand_x = torch.Tensor(np.random.random((1, 1, slice_len, num_feats)))
         output_size = torch.flatten(self.conv1(rand_x)).shape
         self.fc1 = nn.Linear(in_features=output_size.numel(), out_features=512)
         self.relu3 = nn.ReLU()
@@ -177,7 +173,7 @@ def train_func(config: Dict):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     from torch.optim.lr_scheduler import ReduceLROnPlateau
-    
+
     scheduler = ReduceLROnPlateau(optimizer, 'min', min_lr=0.00001, verbose=True)
     loss_results = []
 
@@ -297,9 +293,13 @@ if __name__ == "__main__":
     train_config['isDebug'] = args.isDebug
     train_config['slice_len'] = ds_info['slice_len']
     train_config['num_feats'] = ds_info['numfeats']
-
+    print(train_config)
     if not args.test:
-
+        if not args.isDebug:
+            import ray.train as train
+            from ray.train.torch import TorchTrainer, TorchPredictor
+            from ray.air.config import ScalingConfig
+            from ray.air import session, Checkpoint
         if not train_config['isDebug']:
             import ray
             ray.init(address=args.address)
@@ -309,17 +309,20 @@ if __name__ == "__main__":
 
         #debug_train_func(train_config)
     else:
-
-        cp_path = args.cp_path
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
+        """
+        cp_path = args.cp_path
         cp = Checkpoint(local_path=cp_path)
         model.load_state_dict(cp.to_dict().get("model_weights"))
-
         # save a new model state using torch functions to allow loading model into gpu
-        device = torch.device("cuda")
-        model_params_filename = 'model_weights__slice'+str(train_config['slice_len'])+'.pt'
-        torch.save(model.state_dict(), model_params_filename)
-        model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
+        torch.save(model.state_dict(), 'cpu_model.pt')
+        """
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            model.load_state_dict(torch.load('../model/model_weights__slice8.pt', map_location='cuda:0'))
+        else:
+            device = 'cpu'
+            model.load_state_dict(torch.load('../model/model_weights__slice8.pt'))
         model.to(device)
 
         """
@@ -336,7 +339,7 @@ if __name__ == "__main__":
                 #test_loss += loss_fn(pred, y).item()
                 #correct += (pred.argmax(1) == y).type(torch.float).sum().item()
                 labels = pred.argmax(1)
-                
+
                 #  find all the samples from MMTC and keep the ones that are misclassified as URLL
                 MMTC_cix = 1
                 mmtc_ixs = np.where(y == MMTC_cix)    # let's retrieve samples indexes in this batch that belong to the second class MMTC
@@ -356,16 +359,27 @@ if __name__ == "__main__":
                 plt.show()
         """
 
+        print('Testing each sample..')
+        for X, y in ds_test:
+            X = X.reshape((1, X.shape[0], X.shape[1]))
+            X = X.to(device)
+            pred = model(X)
+            print('Correct label ', y, 'predicted label', pred.argmax(1))
+
+        # TODO: for colosseum, we don't have all the source files, therefore the classes are not read correctly in load_csv_traces()
+        """
         # load normalization parameters
         colsparam_dict = pickle.load(open(args.norm_param_path, 'rb'))
         # load and normalize a trace input
         traces = load_csv_traces(['Trial1', 'Trial2', 'Trial3', 'Trial4', 'Trial5', 'Trial6'], args.ds_path, norm_params=colsparam_dict)
 
-        t5_embb = traces[5]['embb'].values
-        t5_mmtc = traces[5]['mmtc'].values
-        t5_urllc = traces[5]['urll'].values
-        t5_ctrl = traces[5]['ctrl'].values
 
+        print(traces)
+        t5_embb = traces[2]['embb'].values
+        t5_mmtc = traces[2]['mmtc'].values
+        t5_urllc = traces[2]['urll'].values
+        t5_ctrl = traces[2]['ctrl'].values
+        
         tr = t5_ctrl
         for t in range(tr.shape[0]):
             input_sample = tr[t:t + train_config['slice_len']]
@@ -373,21 +387,10 @@ if __name__ == "__main__":
             input = input.to(device)    # transfer input data to GPU
             pred = model(input)
             class_ix = pred.argmax(1)
+            print("Prediction:", pred)
             #mean, stddev = timing_inference_GPU(input, model)
 
-        plt.figure(figsize=(30, 1))
-        plt.imshow(tr[:1000, :].T)
-        plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
+        #plt.figure(figsize=(30, 1))
+        #plt.imshow(tr[:1000, :].T)
+        #plt.show()
+        """
