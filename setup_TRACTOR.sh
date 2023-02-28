@@ -1,4 +1,5 @@
 #!/bin/bash
+## HOW TO RUN: ./setup_TRACTOR.sh genesys-<eNB #node> genesys-<UE #node> genesys-<RIC #node> 
 # start the RF scenario + SCOPE on the gNB
 sshpass -p "scope" ssh $1 'colosseumcli rf start 1017 -c && cd /root/radio_api && python3 scope_start.py --config-file radio_interactive.conf'
 # start SCOPE on the UE
