@@ -14,3 +14,9 @@ It is recommended to use the -i (--ip) field for your implementation. The defaul
 The ports do not need to be specified UNLESS you are implementing multiple instances of traffic on the same device. Then you must specify an unique port for each instance.
 
 -python contains our ML models
+
+## Setup TRACTOR on Colosseum
+After initializing the nodes, call the following script:
+```
+sh setup_TRACTOR.sh genesys-<eNB #node> genesys-<UE #node> genesys-<RIC #node>
+```
