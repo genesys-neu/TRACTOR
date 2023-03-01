@@ -8,5 +8,8 @@ sshpass -p "scope" ssh $2 'cd /root/radio_api && python3 scope_start.py --config
 sshpass -p "ChangeMe" ssh $3 'cd ~ && cd radio_code/colosseum-near-rt-ric/setup-scripts/ && ./setup-ric.sh col0'
 IPCOL0=`sshpass -p "ChangeMe" ssh $3 'ifconfig col0 | grep '"'"'inet addr'"'"' | cut -d: -f2 | awk '"'"'{print $1}'"'"''`
 echo $IPCOL0
-sshpass -p "scope" ssh $1 "cd /root/radio_code/colosseum-scope-e2/ && sed -i 's/172.30.199.202/${IPCOL0}/' build_odu.sh && ./build_odu.sh clean"
-sshpass -p "ChangeMe" ssh $3 "cd /root/radio_code/colosseum-near-rt-ric/setup-scripts && ./setup-sample-xapp.sh gnb:311-048-01090801"
+sshpass -p "scope" ssh $1 "cd /root/radio_code/colosseum-scope-e2/ && sed -i 's/172.30.199.202/${IPCOL0}/' build_odu.sh && ./build_odu.sh clean && ./run_odu.sh "
+echo "Waiting few seconds to make sure the E2 connection has been established.."
+sleep 5
+GNBID=`sshpass -p "ChangeMe" ssh $3 "docker logs e2term | grep -Eo 'gnb:[0-9]+-[0-9]+-[0-9]+' | tail -1"`
+sshpass -p "ChangeMe" ssh $3 "cd /root/radio_code/colosseum-near-rt-ric/setup-scripts && ./setup-sample-xapp.sh ${GNBID}"
