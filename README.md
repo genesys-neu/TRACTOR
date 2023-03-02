@@ -16,7 +16,20 @@ The ports do not need to be specified UNLESS you are implementing multiple insta
 -python contains our ML models
 
 ## Setup TRACTOR on Colosseum
+Create a reservation on Colosseum involving 3 nodes and the following images (in this order):
+- `groen-scope-w-e2` (gNB image)
+- `groen-scope` (UE image)
+- `groen-coloran-prebuilt` (RIC)
+
 After initializing the nodes, call the following script:
 ```
-sh setup_TRACTOR.sh genesys-<eNB #node> genesys-<UE #node> genesys-<RIC #node>
+sh setup_TRACTOR_gNB_UE.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #node>
+```
+This first script will initialize the gNB and UE LXC containers. After this script is complete, follow the instructions on the terminal in order to make sure the connection on E2 interface has been established and then proceed with initialization of the RIC:
+```
+sh setup_TRACTOR_gNB_UE.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #node>
+```
+Once the RIC image has been deployed, launch the command to update the source code for the traffic classifier xApp:
+```
+sh transfer2Colosseum.sh genesys-<RIC #node>
 ```
