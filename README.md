@@ -16,10 +16,14 @@ The ports do not need to be specified UNLESS you are implementing multiple insta
 -python contains our ML models
 
 ## Setup TRACTOR on Colosseum
+Requirements: 
+  - Account for Colosseum
+  - Local ssh config initialized as explained in their tutorial
+
 Create a reservation on Colosseum involving 3 nodes and the following images (in this order):
-- `groen-scope-w-e2` (gNB image)
-- `groen-scope` (UE image)
-- `groen-coloran-prebuilt` (RIC)
+- `groen-scope-w-e2` (gNB image) - root pwd: `scope`
+- `groen-scope` (UE image) - root pwd: `scope`
+- `groen-coloran-prebuilt` (RIC) - root pwd: `ChangeMe`
 
 After initializing the nodes, call the following script:
 ```
@@ -33,3 +37,20 @@ Once the RIC image has been deployed, launch the command to update the source co
 ```
 sh transfer2Colosseum.sh genesys-<RIC #node>
 ```
+Once the nodes have been initialized, you can connect to each of them and run the following commands (in this order):
+  - On gNB
+  ```
+  cd /root/radio_code/colosseum-scope-e2 && ./run_odu.sh
+  ```
+  - On RIC
+  ```
+  docker exec -it sample-xapp-24 bash
+  cd /home/sample-xapp/
+  ./run_xapp.sh
+  ```
+  and wait until the app init is complete.
+  - On UE
+  ```
+  iperf3 -c 172.16.0.1 -p 5204 -t <num seconds>
+  ```
+  where `<num seconds>` is the number of seconds to run for the traffic generator.
