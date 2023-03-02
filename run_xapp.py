@@ -63,7 +63,7 @@ def main():
             # check to see if the recently received KPI is actually new
             kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
             # let's remove the KPIs we don't need
-            kpi_filt = kpi_process[np.array([1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])]
+            kpi_filt = kpi_process[np.array([1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18])]
             if len(kpi) == 0:
                 # if the incoming KPI list is empty, just add the incoming KPIs
                 kpi.append(kpi_filt)
@@ -81,7 +81,8 @@ def main():
                     kpi.append(kpi_filt)
                     # here we have the new input ready for the ML model
                     with open('/home/kpi_log.txt', 'a') as f:
-                        f.write(str(np.array(kpi))+'\n')
+                        np_kpi = np.array(kpi)
+                        f.write(str(np_kpi[:,:5])+'\n')
 
 
 if __name__ == '__main__':
