@@ -1,0 +1,34 @@
+embb, mmtc, urll:
+This was the first data set collected. I collected this data over multiple time periods both stationary and moving UE. 
+The mmtc includes traffic collected while driving. The urllc traffic was both stationaring and walking. The embb traffic 
+was only stationary.
+The original data contained one, two, or three of the traffic types. 
+After capturing all the data, I seperated it by class type. Next, I combined all the time periods into one file.
+Because of this, there may be time gaps when other traffic types was present. That traffic has been removed, 
+but leaves behind empty time.
+
+embb_2, mmtc_2, urll_2
+This is the second data set collected. When collecting this data, I focused on a specific traffic slice. 
+In other words, for the embb traffic, I only streamed YouTube and started and stopped the traffic immediately
+before and after streaming YouTube. This was collected on campus, some stationary in ISEC, and some walking.
+
+embb_3, mmtc_3, urllc_3, mixed
+This is the third data set collected. When collecting this data, I focused on a specific traffic slice. 
+In other words, for the embb traffic, I only streamed YouTube and started and stopped the traffic immediately
+before and after streaming YouTube. This was collected in ISEC, mostly stationary.
+
+I also included a mixed traffic sample that has all traffic types.
+
+embb_11_18, mmtc_11_18, urll_11_18
+When collecting this data, I focused on a specific traffic slice. I captured all trafic on 18 November.
+For the embb traffic, I streamed Netflix and started and stopped the traffic immediately
+before and after streaming Netflix. I only captured the Netflix traffic. 
+For the urllc traffic I used Facebook messenger for live video chat and voice only calls, capturing only the facebook messanger traffic.
+For the mmtc, I captured all traffic while not using the UE for anything except text messages (and background traffic).
+I captured all traffic in ISEC with no mobility. 
+
+embb_03_03a, embb_03_03b, embb_03_03c, mmtc_03_03, urllc_03_03
+When collecting this data I focused on a specific traffic slice. I caputred all traffic on 3 March.
+For the embb data, I downloaded several large videos using OneDrive, only caputring OneDrive traffic. This was stationary in ISEC.
+For the urllc data I used Google Meet for live video chat. This was walking outside on Northeastern campus.
+For the mmtc data, I captured all background traffic while not actively using the phone. This was stationary in ISEC.
