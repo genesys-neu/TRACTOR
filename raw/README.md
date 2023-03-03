@@ -16,7 +16,6 @@ embb_3, mmtc_3, urllc_3, mixed
 This is the third data set collected. When collecting this data, I focused on a specific traffic slice. 
 In other words, for the embb traffic, I only streamed YouTube and started and stopped the traffic immediately
 before and after streaming YouTube. This was collected in ISEC, mostly stationary.
-
 I also included a mixed traffic sample that has all traffic types.
 
 embb_11_18, mmtc_11_18, urll_11_18
