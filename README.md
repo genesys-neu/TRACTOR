@@ -31,7 +31,7 @@ sh setup_TRACTOR_gNB_UE.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #
 ```
 This first script will initialize the gNB and UE LXC containers. After this script is complete, follow the instructions on the terminal in order to make sure the connection on E2 interface has been established and then proceed with initialization of the RIC:
 ```
-sh setup_TRACTOR_gNB_UE.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #node>
+sh setup_TRACTOR_RIC.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #node>
 ```
 Once the RIC image has been deployed, launch the command to update the source code for the traffic classifier xApp:
 ```
