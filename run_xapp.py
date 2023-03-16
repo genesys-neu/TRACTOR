@@ -25,9 +25,13 @@ def main():
     Nclass = 4
     num_feats = 17
     torch_model_path = 'model/model_weights__slice8.pt'
+    norm_param_path = 'logs/cols_maxmin.pkl'
+    colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
     # initialize the KPI matrix (4 samples, 19 KPIs each)
     #kpi = np.zeros([slice_len, num_feats])
     kpi = []
+    last_timestamp = 0
+    curr_timestamp = 0
 
     # initialize the ML model
     print('Init ML model...')
@@ -56,33 +60,50 @@ def main():
                 break
         else:
             logging.info('Received data: ' + repr(data_sck))
-            with open('/home/kpi_new_log.txt', 'a') as f:
-                f.write('{}\n'.format(data_sck))
+            # with open('/home/kpi_new_log.txt', 'a') as f:
+            #     f.write('{}\n'.format(data_sck))
 
             kpi_new = np.fromstring(data_sck, sep=',')
             # check to see if the recently received KPI is actually new
             kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
+            curr_timestamp = kpi_process[0]
             # let's remove the KPIs we don't need
             kpi_filt = kpi_process[np.array([1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18])]
-            if len(kpi) == 0:
-                # if the incoming KPI list is empty, just add the incoming KPIs
-                kpi.append(kpi_filt)
-            if 0 < len(kpi) < slice_len:
-                # if we are still filling the buffer, let's make sure the new KPI has higher timestamp value
-                # compared to the last set of KPIs recorded
-                if kpi_process[0] > kpi[-1][0]:
+
+            if curr_timestamp > last_timestamp:
+                last_timestamp = curr_timestamp
+                if len(kpi) < slice_len:
+                    # if the incoming KPI list is empty, just add the incoming KPIs
                     kpi.append(kpi_filt)
-            elif len(kpi) == slice_len:
-                # again make sure we have a new set of KPIs by checking the timestamp
-                if kpi_process[0] > kpi[-1][0]:
+                else:
                     # to insert, we pop the first element of the list
                     kpi.pop(0)
                     # and append the last incoming KPI set
                     kpi.append(kpi_filt)
                     # here we have the new input ready for the ML model
-                    with open('/home/kpi_log.txt', 'a') as f:
-                        np_kpi = np.array(kpi)
-                        f.write(str(np_kpi[:,:5])+'\n')
+                    # let's create a numpy array
+                    np_kpi = np.array(kpi)
+                    # let's normalize each columns based on the params derived while training
+                    assert (np_kpi.shape[1] == len(list(colsparam_dict.keys())))
+                    for c in range(np_kpi.shape[1]):
+                        print('*****', c, '*****')
+                        logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
+                        np_kpi[:, c] = (np_kpi[:, c] - colsparam_dict[c]['min']) / (
+                                    colsparam_dict[c]['max'] - colsparam_dict[c]['min'])
+                        logging.info('Normalized vector: '+repr(np_kpi[:, c]))
+                    # and then pass it to our model as a torch tensor
+                    t_kpi = torch.Tensor(np_kpi.reshape(1, np_kpi.shape[0], np_kpi.shape[1])).to(device)
+                    try:
+                        pred = model(t_kpi)
+                        logging.info('Predicted class ' + str(pred.argmax(1)))
+                    except:
+                        logging.info('ERROR while predicting class')
+
+                    # with open('/home/kpi_log.txt', 'a') as f:
+                    #   f.write(str(np_kpi[:, :5]) + '\n')
+
+
+
 
 
 if __name__ == '__main__':

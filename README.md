@@ -35,7 +35,7 @@ sh setup_TRACTOR_gNB_UE.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #
 ```
 Once the RIC image has been deployed, launch the command to update the source code for the traffic classifier xApp:
 ```
-sh transfer2Colosseum.sh genesys-<RIC #node>
+sh transfer2Colosseum.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #node>
 ```
 Once the nodes have been initialized, you can connect to each of them and run the following commands (in this order):
   - On gNB
