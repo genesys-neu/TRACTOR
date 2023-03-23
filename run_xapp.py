@@ -65,10 +65,10 @@ def main():
 
             kpi_new = np.fromstring(data_sck, sep=',')
             # check to see if the recently received KPI is actually new
-            kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
-            curr_timestamp = kpi_process[0]
+            # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
+            curr_timestamp = kpi_new[0]
             # let's remove the KPIs we don't need
-            kpi_filt = kpi_process[np.array([1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18])]
+            kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
 
             if curr_timestamp > last_timestamp:
                 last_timestamp = curr_timestamp
