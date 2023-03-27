@@ -49,6 +49,8 @@ def main():
     print('Dummy predict', pred)
     print('Start listening on E2 interface...')
 
+    count_pkl = 0
+
     while True:
         data_sck = receive_from_socket(control_sck)
         if len(data_sck) <= 0:
@@ -95,14 +97,15 @@ def main():
                     t_kpi = torch.Tensor(np_kpi.reshape(1, np_kpi.shape[0], np_kpi.shape[1])).to(device)
                     try:
                         pred = model(t_kpi)
+                        this_class = pred.argmax(1)
                         logging.info('Predicted class ' + str(pred.argmax(1)))
+                        pickle.dump((np_kpi, this_class), open('/home/class_output_'+str(count_pkl)+'.pkl', 'wb'))
+                        count_pkl += 1
                     except:
                         logging.info('ERROR while predicting class')
 
                     # with open('/home/kpi_log.txt', 'a') as f:
                     #   f.write(str(np_kpi[:, :5]) + '\n')
-
-
 
 
 
