@@ -21,9 +21,9 @@ Index : Name
 16 : ul_mcs
 17 : ul_n_samples
 18 : ul_buffer_bytes
-19 : rx_brate_downlink_Mbps
-20 : rx_pkts_downlink
-21 : rx_errors_downlink_perc
+19 : rx_brate_uplink_Mbps
+20 : rx_pkts_uplink
+21 : rx_errors_uplink_perc
 22 : ul_rssi
 23 : ul_sinr
 24 : phr
