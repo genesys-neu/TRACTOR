@@ -1,4 +1,4 @@
-This was the first data set collected. I collected this data over multiple time periods both stationary and moving UE. 
+This was the first data set collected (embb, mmtc, urll). I collected this data over multiple time periods both stationary and moving UE. 
 The mmtc includes traffic collected while driving. The urllc traffic was both stationaring and walking. The embb traffic 
 was only stationary.
 The original data contained one, two, or three of the traffic types. 
