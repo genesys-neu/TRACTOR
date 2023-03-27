@@ -1,4 +1,4 @@
-When collecting this data, I focused on a specific traffic slice. I captured all trafic on 18 November.
+When collecting this data, I focused on a specific traffic slice. I captured all trafic on 18 November (xxxx_11_18).
 For the embb traffic, I streamed Netflix and started and stopped the traffic immediately
 before and after streaming Netflix. I only captured the Netflix traffic. 
 For the urllc traffic I used Facebook messenger for live video chat and voice only calls, capturing only the facebook messanger traffic.
