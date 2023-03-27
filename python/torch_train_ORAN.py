@@ -16,6 +16,9 @@ from ray.air import session, Checkpoint
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from ORAN_dataset import load_csv_traces
 
+from sklearn.metrics import confusion_matrix as conf_mat
+import seaborn as sn
+
 #ds_train = ORANTracesDataset('train_in__Trial1_Trial2_Trial3.pkl', 'train_lbl__Trial1_Trial2_Trial3.pkl')
 #ds_test = ORANTracesDataset('valid_in__Trial1_Trial2_Trial3.pkl', 'valid_lbl__Trial1_Trial2_Trial3.pkl')
 # ds_train = ORANTracesDataset('train_in__Trial1_Trial2.pkl', 'train_lbl__Trial1_Trial2.pkl')
@@ -120,7 +123,6 @@ def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
             loss, current = loss.item(), batch * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
-from sklearn.metrics import confusion_matrix as conf_mat
 def validate_epoch(dataloader, model, loss_fn, Nclasses, isDebug=False):
     if not isDebug:
         size = len(dataloader.dataset) // session.get_world_size()
@@ -317,7 +319,8 @@ if __name__ == "__main__":
 
         # save a new model state using torch functions to allow loading model into gpu
         device = torch.device("cuda")
-        model_params_filename = 'model_weights__slice'+str(train_config['slice_len'])+'.pt'
+        os.makedirs('model',exist_ok=True)
+        model_params_filename =  os.path.join('model', 'model_weights__slice'+str(train_config['slice_len'])+'.pt')
         torch.save(model.state_dict(), model_params_filename)
         model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
         model.to(device)
@@ -360,24 +363,65 @@ if __name__ == "__main__":
         colsparam_dict = pickle.load(open(args.norm_param_path, 'rb'))
         # load and normalize a trace input
         traces = load_csv_traces(['Trial1', 'Trial2', 'Trial3', 'Trial4', 'Trial5', 'Trial6'], args.ds_path, norm_params=colsparam_dict)
+        classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
+        y_true = []
+        y_output = []
 
-        t5_embb = traces[5]['embb'].values
-        t5_mmtc = traces[5]['mmtc'].values
-        t5_urllc = traces[5]['urll'].values
-        t5_ctrl = traces[5]['ctrl'].values
+        for tix, dtrace in enumerate(traces):
+            print('------------ Trial', tix+1, '------------')
+            trial_y_true = []
+            trial_y_output = []
+            for k in dtrace.keys():
+                num_correct = 0
+                tr = dtrace[k].values
+                correct_class = classmap[k]
 
-        tr = t5_ctrl
-        for t in range(tr.shape[0]):
-            input_sample = tr[t:t + train_config['slice_len']]
-            input = torch.Tensor(input_sample[np.newaxis, :, :])
-            input = input.to(device)    # transfer input data to GPU
-            pred = model(input)
-            class_ix = pred.argmax(1)
-            #mean, stddev = timing_inference_GPU(input, model)
+                for t in range(tr.shape[0]):
+                    if t + train_config['slice_len'] < tr.shape[0]:
+                        input_sample = tr[t:t + train_config['slice_len']]
+                        input = torch.Tensor(input_sample[np.newaxis, :, :])
+                        input = input.to(device)    # transfer input data to GPU
+                        pred = model(input)
+                        class_ix = pred.argmax(1)
+                        co = class_ix.cpu().numpy()[0]
+                        #if co == correct_class:
+                        #    num_correct += 1
+                        y_true.append(correct_class)
+                        y_output.append(co)
+                        trial_y_true.append(correct_class)
+                        trial_y_output.append(co)
 
-        plt.figure(figsize=(30, 1))
-        plt.imshow(tr[:1000, :].T)
+                    #mean, stddev = timing_inference_GPU(input, model)
+                #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
+            trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(dtrace.keys()))))
+            for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
+                sum_row = np.sum(trial_cm[r, :])
+                trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
+            print('Confusion Matrix (%)')
+            print(trial_cm)
+
+        cm = conf_mat(y_true,y_output, labels=list(range(len(classmap.keys()))))
+
+        for r in range(cm.shape[0]):  # for each row in the confusion matrix
+            sum_row = np.sum(cm[r, :])
+            cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
+
+
+        axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if cm.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
+        df_cm = pd.DataFrame(cm, axis_lbl, axis_lbl)
+        # plt.figure(figsize=(10,7))
+        sn.set(font_scale=1.4)  # for label size
+        sn.heatmap(df_cm, annot=True, annot_kws={"size": 16})  # font size
         plt.show()
+        plt.clf()
+        print('-------------------------------------------')
+        print('-------------------------------------------')
+        print('Global confusion matrix (%) (all trials)')
+        print(cm)
+
+        #plt.figure(figsize=(30, 1))
+        #plt.imshow(tr[:1000, :].T)
+        #plt.show()
 
 
 
