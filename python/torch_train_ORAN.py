@@ -261,11 +261,14 @@ def train_func(config: Dict):
     total_params = sum(p.numel() for p in model.parameters())
     print(f'TOTAL                {total_params}')
 
+    best_loss = np.inf
+    epochs_wo_improvement = 0
     for e in range(epochs):
         train_epoch(train_dataloader, model, loss_fn, optimizer, isDebug)
         loss = validate_epoch(test_dataloader, model, loss_fn, Nclasses=Nclass, isDebug=isDebug)
         scheduler.step(loss)
         loss_results.append(loss)
+        epochs_wo_improvement += 1
         if not isDebug:
 
             # store checkpoint only if the loss has improved
@@ -276,7 +279,19 @@ def train_func(config: Dict):
             )
 
             session.report(dict(loss=loss), checkpoint=checkpoint)
+        else:
+            if best_loss > loss:
+                epochs_wo_improvement = 0
+                best_loss = loss
+                model_name = f'model.{slice_len}.pt'
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss,
+                }, os.path.join('./', model_name))
 
+        if epochs_wo_improvement > 10: # early stopping
+            return loss_results
     # return required for backwards compatibility with the old API
     # TODO(team-ml) clean up and remove return
     return loss_results
