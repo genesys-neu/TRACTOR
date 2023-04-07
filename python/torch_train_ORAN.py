@@ -252,7 +252,7 @@ def train_func(config: Dict):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     from torch.optim.lr_scheduler import ReduceLROnPlateau
     
-    scheduler = ReduceLROnPlateau(optimizer, 'min', min_lr=0.00001, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=6, min_lr=0.00001, verbose=True)
     loss_results = []
     
     print(model)
@@ -290,7 +290,7 @@ def train_func(config: Dict):
                     'loss': loss,
                 }, os.path.join('./', model_name))
 
-        if epochs_wo_improvement > 10: # early stopping
+        if epochs_wo_improvement > 12: # early stopping
             return loss_results
     # return required for backwards compatibility with the old API
     # TODO(team-ml) clean up and remove return
