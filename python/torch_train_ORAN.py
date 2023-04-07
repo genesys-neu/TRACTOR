@@ -291,6 +291,9 @@ def train_func(config: Dict):
                 }, os.path.join('./', model_name))
 
         if epochs_wo_improvement > 12: # early stopping
+            print('------------------------------------')
+            print('Early termination implemented at epoch:', e+1)
+            print('------------------------------------')
             return loss_results
     # return required for backwards compatibility with the old API
     # TODO(team-ml) clean up and remove return
