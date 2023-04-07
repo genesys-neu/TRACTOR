@@ -514,6 +514,7 @@ if __name__ == "__main__":
         sn.set(font_scale=1.4)  # for label size
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16})  # font size
         plt.show()
+        plt.savefig(f"Results_slice_{ds_info['slice_len']}.png")
         plt.clf()
         print('-------------------------------------------')
         print('-------------------------------------------')
