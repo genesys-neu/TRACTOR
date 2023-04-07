@@ -81,7 +81,7 @@ with open(file_name, 'r') as csvfile:
 
         for row in datareader:
             if row[3] == '172.30.1.1':
-                print('It is our turn to send')
+                #print('It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
@@ -90,25 +90,25 @@ with open(file_name, 'r') as csvfile:
 
             else:
                 # we should listen until we get data, or it is our turn to send again
-                print('listening')
+                #print('listening')
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
                     if data:
                         break
 
     else:  # if we are the eNB, we need to wait for a message from the UE before moving on
-        print("waiting for UE")
+        #print("waiting for UE")
 
         while True:
             data, address = rec_sock.recvfrom(4096)
             if data:
-                print("Starting experiment")
+                #print("Starting experiment")
                 start_time = time.time()
                 break
 
         for row in datareader:
             if row[3] == '172.30.1.250':
-                print('It is our turn to send')
+                #print('It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
@@ -116,7 +116,7 @@ with open(file_name, 'r') as csvfile:
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
             else:
-                print('listening')
+                #print('listening')
                 # we should listen until we get data, or it is our turn to send again
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
