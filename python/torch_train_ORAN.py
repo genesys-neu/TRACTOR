@@ -410,15 +410,17 @@ if __name__ == "__main__":
         cp_path = args.cp_path
         global_model = TransformerNN if args.useTransformer else ConvNN
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
-        cp = Checkpoint(local_path=cp_path)
-        model.load_state_dict(cp.to_dict().get("model_weights"))
-
-        # save a new model state using torch functions to allow loading model into gpu
         device = torch.device("cuda")
-        os.makedirs('model',exist_ok=True)
-        model_params_filename =  os.path.join('model', 'model_weights__slice'+str(train_config['slice_len'])+'.pt')
-        torch.save(model.state_dict(), model_params_filename)
-        model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
+        if args.isDebug:
+            model.load_state_dict(torch.load(cp_path, map_location='cuda:0')['model_state_dict'])
+        else:
+            cp = Checkpoint(local_path=cp_path)
+            model.load_state_dict(cp.to_dict().get("model_weights"))
+            # save a new model state using torch functions to allow loading model into gpu
+            os.makedirs('model',exist_ok=True)
+            model_params_filename =  os.path.join('model', 'model_weights__slice'+str(train_config['slice_len'])+'.pt')
+            torch.save(model.state_dict(), model_params_filename)
+            model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
         model.to(device)
 
         """
