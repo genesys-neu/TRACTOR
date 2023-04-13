@@ -9,9 +9,14 @@ sshpass -p "ChangeMe" scp ../../traffic_gen2/logs/cols_maxmin.pkl $3:/root/logs/
 sshpass -p "ChangeMe" scp ../../traffic_gen2/logs/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice8_wCQI.pkl $3:/root/logs/.
 sshpass -p "ChangeMe" ssh $3 'mkdir /root/model'
 sshpass -p "ChangeMe" scp model/model_weights__slice8.pt $3:/root/model/.
-sshpass -p "ChangeMe" scp -r ../traffic_gen $3:/root/.
-sshpass -p "scope"  scp -r ../traffic_gen $1:/root/.
-sshpass -p "scope" scp -r ../traffic_gen $2:/root/.
+
+sshpass -p "ChangeMe" rsync -av -e ssh --exclude='colosseum' ../traffic_gen $3:/root/.
+sshpass -p "scope" rsync -av -e ssh --exclude='colosseum' ../traffic_gen $1:/root/.
+sshpass -p "scope" rsync -av -e ssh --exclude='colosseum' ../traffic_gen $2:/root/.
+#sshpass -p "ChangeMe" scp -r ../traffic_gen $3:/root/.
+#sshpass -p "scope"  scp -r ../traffic_gen $1:/root/.
+#sshpass -p "scope" scp -r ../traffic_gen $2:/root/.
+
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/traffic_gen sample-xapp-24:/home/sample-xapp/.'
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/logs/cols_maxmin.pkl sample-xapp-24:/home/sample-xapp/traffic_gen/logs/ && docker cp /root/logs/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice8_wCQI.pkl sample-xapp-24:/home/sample-xapp/traffic_gen/logs/'
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/model/ sample-xapp-24:/home/sample-xapp/traffic_gen/.'
