@@ -175,18 +175,18 @@ void readLastMetricsLines(char *file_name, int to_read, char **output_string, in
       }
 
   }
-  if (strlen(*output_string) > 1){
-    printf("Filled output\n"); //TODO see if we have to add the null termination char '\0' here
-  }
+  //if (strlen(*output_string) > 1){
+  //  printf("Filled output\n");
+  //}
 
   if (pclose(p_fp)) {
       printf("Command not found or exited with error status\n");
       return -1;
   }
 
-  printf("[mau] valid_metrics %d\nTot. Return output: %s \n", valid_metrics, output_string);
+  printf("[mau] valid_metrics %d\nTot. Return output: %s \n", valid_metrics, *output_string);
 
-    //TODO double check if we need to free here or not
+
   /*
   if (valid_metrics < 1) {
     printf("Freeing inside readLastMetricsLines\n");
