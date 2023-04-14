@@ -20,5 +20,5 @@ sshpass -p "scope" rsync -av -e ssh --exclude='colosseum' ../traffic_gen $2:/roo
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/traffic_gen sample-xapp-24:/home/sample-xapp/.'
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/logs/cols_maxmin.pkl sample-xapp-24:/home/sample-xapp/traffic_gen/logs/ && docker cp /root/logs/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice8_wCQI.pkl sample-xapp-24:/home/sample-xapp/traffic_gen/logs/'
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/model/ sample-xapp-24:/home/sample-xapp/traffic_gen/.'
-sshpass -p "ChangeMe" ssh $3 'docker exec sample-xapp-24 ln -s /home/sample-xapp/xapp_control.py  /home/sample-xapp/traffic_gen/xapp_control.py'
+#sshpass -p "ChangeMe" ssh $3 'docker exec sample-xapp-24 ln -s /home/sample-xapp/xapp_control.py  /home/sample-xapp/traffic_gen/xapp_control.py'
 sshpass -p "ChangeMe" ssh $3 'docker exec sample-xapp-24 mv /home/sample-xapp/traffic_gen/run_xapp.sh /home/sample-xapp/. && docker exec sample-xapp-24 chmod +x /home/sample-xapp/run_xapp.sh'

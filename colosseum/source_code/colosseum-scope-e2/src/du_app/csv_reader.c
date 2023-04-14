@@ -125,9 +125,9 @@ void append_string(char **dest, char *src) {
     size_t dest_len = strlen(*dest);
     size_t src_len = strlen(src);
     if (dest_len == 0) {
-        *dest = malloc(src_len + 1);
+        *dest = calloc(src_len + 1, sizeof(char));
     }else{
-        *dest = realloc(*dest, dest_len + src_len + 1); // +1 for null-terminator
+        *dest = realloc(*dest, (dest_len + src_len + 1) * sizeof(char)); // +1 for null-terminator
     }
     strcat(*dest, src);
 }
@@ -168,9 +168,15 @@ void readLastMetricsLines(char *file_name, int to_read, char **output_string, in
   }
 
   while (fgets(buf, BUFSIZE, p_fp) != NULL) {
-      append_string(output_string, buf);
-      valid_metrics++;
-      printf("--> %s", buf);
+      if (!(strcmp(buf, "\n") == 0)){
+          append_string(output_string, buf);
+          valid_metrics++;
+          printf("--> %s", buf);
+      }
+
+  }
+  if (strlen(*output_string) > 1){
+    printf("Filled output\n"); //TODO see if we have to add the null termination char '\0' here
   }
 
   if (pclose(p_fp)) {
@@ -178,20 +184,28 @@ void readLastMetricsLines(char *file_name, int to_read, char **output_string, in
       return -1;
   }
 
-  printf("[mau] valid_metrics %d\noutput_string\nTot. Return output: %s \n", valid_metrics, output_string);
+  printf("[mau] valid_metrics %d\nTot. Return output: %s \n", valid_metrics, output_string);
 
+    //TODO double check if we need to free here or not
+  /*
   if (valid_metrics < 1) {
     printf("Freeing inside readLastMetricsLines\n");
-    free(*output_string);
-    *output_string = NULL;
-    printf("Freed\n");
+    if (strlen(*output_string) > 1){
+        free(*output_string);
+        *output_string = NULL;
+        printf("Freed\n");
+    }
   }
+    //the following we don't need it (this is just to resize the buffer if less lines have been read, but in our case is allocated dynamically)
+
   else if (valid_metrics < to_read) {
     printf("Reallocating inside readLastMetricsLines\n");
     // reallocate output_string accordingly
     *output_string = (char*) realloc(*output_string, (strlen(*output_string) + 1) * sizeof(char*));
+    printf("[mau] output_string %d, after realloc %d\n", strlen(*output_string), (strlen(*output_string) + 1));
     printf("Reallocated\n");
   }
+  */
 }
 
 
@@ -244,7 +258,7 @@ void get_tx_string(char **send_metrics, int lines_to_read) {
     // read metrics, always skip header
     readLastMetricsLines(file_path, lines_to_read, &metrics_string, 1);
 
-    if (metrics_string) {
+    if (strlen(metrics_string) > 1) {
       int metrics_size = strlen(metrics_string);
 
       if (!(*send_metrics)) {
