@@ -210,6 +210,7 @@ void readLastMetricsLines(char *file_name, int to_read, char **output_string, in
 
 
 // get content of specified directory
+/*
 int getDirContent(char *directory_name, char (*dir_content)[MAX_BUF_SIZE]) {
 
   DIR *ptr;
@@ -238,6 +239,41 @@ int getDirContent(char *directory_name, char (*dir_content)[MAX_BUF_SIZE]) {
 
   return num_el;
 }
+*/
+// get content of specified directory
+int getDirContent(char *directory_name, char (*dir_content)[MAX_BUF_SIZE]) {
+
+  DIR *ptr;
+  struct dirent *directory;
+
+  // open the specified directory
+  ptr = opendir(directory_name);
+
+  int num_el = 0;
+  // iterate over each file in the directory
+  while((directory = readdir(ptr)) != NULL) {
+    // extract the substring before the first underscore
+    char tmp_str[MAX_BUF_SIZE];
+    sscanf(directory->d_name, "%*[^_]%*c%[^_]", tmp_str);
+
+    // extract the substring after the first underscore
+    char* token = strtok(NULL, "_");
+    if (token != NULL) {
+      // check whether the remaining substring ends with "metrics.csv"
+      if (strcmp(token, "metrics.csv") == 0) {
+        // if so, add the filename to dir_content
+        strcpy(dir_content[num_el++], directory->d_name);
+      }
+    }
+  }
+
+  // close the directory
+  closedir(ptr);
+
+  // return the number of matching files found
+  return num_el;
+}
+
 
 
 // read and assemble metrics to send
@@ -310,7 +346,7 @@ void remove_substr (char *string, char *sub) {
 int csv_tester(void) {
 
   char *send_metrics = NULL;
-  int lines_to_read = 2;
+  int lines_to_read = 1; // 2 (original value)
 
   get_tx_string(&send_metrics, lines_to_read);
 

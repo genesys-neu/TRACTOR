@@ -64,7 +64,7 @@ def main():
             logging.info('Received data: ' + repr(data_sck))
             # with open('/home/kpi_new_log.txt', 'a') as f:
             #     f.write('{}\n'.format(data_sck))
-
+            data_sck = data_sck.replace(',,', ',')
             kpi_new = np.fromstring(data_sck, sep=',')
             # check to see if the recently received KPI is actually new
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
