@@ -435,9 +435,9 @@ if __name__ == "__main__":
     parser.add_argument("--cp_path", help='Path to the checkpoint to load at test time.')
     parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
     parser.add_argument("--transformer", default=None, choices=['v1', 'v2'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
+    args, _ = parser.parse_known_args()
     if args.transformer is not None:
         transformer = TransformerNN if args.transformer == 'v1' else TransformerNN_v2
-    args, _ = parser.parse_known_args()
 
     ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path)
     ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path)
@@ -567,7 +567,7 @@ if __name__ == "__main__":
         sn.set(font_scale=1.4)  # for label size
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16})  # font size
         plt.show()
-        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}.png")
+        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}.pdf")
         plt.clf()
         print('-------------------------------------------')
         print('-------------------------------------------')
