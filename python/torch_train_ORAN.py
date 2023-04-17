@@ -117,9 +117,9 @@ class TransformerNN(nn.Module):
 
         # we will not use the decoder
         # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
-        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, num_feats)
+        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, 256)
         self.dropout = torch.nn.Dropout(dropout)
-        self.classifier = torch.nn.Linear(num_feats, classes)
+        self.classifier = torch.nn.Linear(256, classes)
         self.logSoftmax = nn.LogSoftmax(dim=1)
     
     def forward(self, src):
@@ -163,9 +163,9 @@ class TransformerNN_v2(nn.Module):
 
         # we will not use the decoder
         # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
-        self.pre_classifier = torch.nn.Linear(num_feats, num_feats*2)
+        self.pre_classifier = torch.nn.Linear(num_feats, 256)
         self.dropout = torch.nn.Dropout(0.2)
-        self.classifier = torch.nn.Linear(num_feats*2, classes)
+        self.classifier = torch.nn.Linear(256, classes)
         self.logSoftmax = nn.LogSoftmax(dim=1)
     
     def forward(self, src):
@@ -333,7 +333,7 @@ def train_func(config: Dict):
             if best_loss > loss:
                 epochs_wo_improvement = 0
                 best_loss = loss
-                model_name = f'model.{slice_len}.{model_postfix}.pt'
+                model_name = f'model.{slice_len}.{model_postfix}.ctrl.pt'
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),

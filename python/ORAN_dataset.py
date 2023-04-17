@@ -41,6 +41,15 @@ def load_csv_traces(trials, data_path, norm_params=None):
 
     return trials_traces
 
+def check_slices(data, index):
+    labels = np.ones((data.shape[0],), dtype=np.int32)*index
+    for i in range(data.shape[0]):
+        sl = data[i]
+        zeros = (sl == 0).astype(int).sum(axis=1)
+        if (zeros > 10).all():
+            labels[i] = 3 # control if all KPIs rows have > 10 zeros
+    return labels
+        
 
 
 def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc'):
@@ -77,15 +86,15 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
                 if ix == 0:
                     print("\teMBB class")
                     embb_data = new_ds
-                    embb_labels = np.ones((embb_data.shape[0],), dtype=np.int32)*ix  # labels are numbers (i.e. no 1 hot encoded)
+                    embb_labels = check_slices(embb_data, ix) # labels are numbers (i.e. no 1 hot encoded)
                 elif ix == 1:
                     print("\tMMTc class")
                     mmtc_data = new_ds
-                    mmtc_labels = np.ones((mmtc_data.shape[0],), dtype=np.int32)*ix
+                    mmtc_labels = check_slices(mmtc_data, ix)
                 elif ix == 2:
                     print("\tURLLc class")
                     urll_data = new_ds
-                    urll_labels = np.ones((urll_data.shape[0],), dtype=np.int32)*ix
+                    urll_labels = check_slices(urll_data, ix)
                 elif ix == 3:
                     print("\tControl / CTRL class")
                     ctrl_data = new_ds
@@ -261,7 +270,7 @@ if __name__ == "__main__":
     file_suffix += '__slice'+str(args.slicelen)
     file_suffix += '_'+args.filemarker if args.filemarker else ''
 
-    pickle.dump(dataset, open(os.path.join(path, 'dataset__' + args.mode + '__' +file_suffix + '.pkl'), 'wb'))
+    pickle.dump(dataset, open(os.path.join(path, 'dataset__' + args.mode + '__' +file_suffix + '_ctrlcorrected_' + '.pkl'), 'wb'))
 
     # save separately maxmin normalization parameters for each column/feature
     norm_param_path = os.path.join(path,'cols_maxmin.pkl')
