@@ -567,7 +567,7 @@ if __name__ == "__main__":
         sn.set(font_scale=1.4)  # for label size
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16})  # font size
         plt.show()
-        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}.pdf")
+        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}_ctrlcorrected.pdf")
         plt.clf()
         print('-------------------------------------------')
         print('-------------------------------------------')
