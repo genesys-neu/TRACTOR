@@ -33,7 +33,6 @@ def load_csv_traces(trials, data_path, norm_params=None):
                 #print('Normalizing Col.', c, '-- Max', norm_params[ix]['max'], ', Min', norm_params[ix]['min'])
                 ds[c] = ds[c].map(lambda x: (x - norm_params[ix]['min']) / (norm_params[ix]['max'] - norm_params[ix]['min']))
 
-
         if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
             trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data, 'ctrl': ctrl_data})
         else:

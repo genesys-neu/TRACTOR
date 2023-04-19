@@ -117,9 +117,9 @@ class TransformerNN(nn.Module):
 
         # we will not use the decoder
         # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
-        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, 256)
+        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, num_feats*2)
         self.dropout = torch.nn.Dropout(dropout)
-        self.classifier = torch.nn.Linear(256, classes)
+        self.classifier = torch.nn.Linear(num_feats*2, classes)
         self.logSoftmax = nn.LogSoftmax(dim=1)
     
     def forward(self, src):
@@ -537,7 +537,7 @@ if __name__ == "__main__":
                         input = input.to(device)    # transfer input data to GPU
                         pred = model(input)
                         class_ix = pred.argmax(1)
-                        zeros = (input.cpu().numpy() == 0).astype(int).sum(axis=1)
+                        zeros = (input_sample == 0).astype(int).sum(axis=1)
                         if (zeros > 10).all():
                             correct_class = 3 # control if all KPIs rows have > 10 zeros
                         else: 
@@ -552,8 +552,8 @@ if __name__ == "__main__":
 
                     #mean, stddev = timing_inference_GPU(input, model)
                 #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
-            trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(dtrace.keys()))))
-            for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
+            trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
+            for r in range(trial_cm.shape[0):  # for each row in the confusion matrix
                 sum_row = np.sum(trial_cm[r, :])
                 trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
             print('Confusion Matrix (%)')
@@ -570,7 +570,7 @@ if __name__ == "__main__":
         df_cm = pd.DataFrame(cm, axis_lbl, axis_lbl)
         # plt.figure(figsize=(10,7))
         sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, annot=True, annot_kws={"size": 16})  # font size
+        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16})  # font size
         plt.show()
         plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}_ctrlcorrected.pdf")
         plt.clf()
