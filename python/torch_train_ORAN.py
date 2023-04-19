@@ -553,14 +553,14 @@ if __name__ == "__main__":
                     #mean, stddev = timing_inference_GPU(input, model)
                 #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
             trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
-            for r in range(trial_cm.shape[0):  # for each row in the confusion matrix
+            for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
                 sum_row = np.sum(trial_cm[r, :])
                 trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
             print('Confusion Matrix (%)')
             print(trial_cm)
 
         cm = conf_mat(y_true,y_output, labels=list(range(len(classmap.keys()))))
-
+        cm = cm.astype('float')
         for r in range(cm.shape[0]):  # for each row in the confusion matrix
             sum_row = np.sum(cm[r, :])
             cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
