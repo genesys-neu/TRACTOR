@@ -117,9 +117,9 @@ class TransformerNN(nn.Module):
 
         # we will not use the decoder
         # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
-        self.pre_classifier = torch.nn.Linear(num_feats, num_feats*2)
+        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, 256)
         self.dropout = torch.nn.Dropout(dropout)
-        self.classifier = torch.nn.Linear(num_feats*2, classes)
+        self.classifier = torch.nn.Linear(256, classes)
         self.logSoftmax = nn.LogSoftmax(dim=1)
     
     def forward(self, src):
@@ -528,7 +528,7 @@ if __name__ == "__main__":
             for k in dtrace.keys():
                 num_correct = 0
                 tr = dtrace[k].values
-                correct_class = classmap[k]
+                #correct_class = classmap[k]
 
                 for t in range(tr.shape[0]):
                     if t + train_config['slice_len'] < tr.shape[0]:
@@ -537,6 +537,11 @@ if __name__ == "__main__":
                         input = input.to(device)    # transfer input data to GPU
                         pred = model(input)
                         class_ix = pred.argmax(1)
+                        zeros = (input.cpu().numpy() == 0).astype(int).sum(axis=1)
+                        if (zeros > 10).all():
+                            correct_class = 3 # control if all KPIs rows have > 10 zeros
+                        else: 
+                            correct_class = classmap[k]
                         co = class_ix.cpu().numpy()[0]
                         #if co == correct_class:
                         #    num_correct += 1
