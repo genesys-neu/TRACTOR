@@ -18,6 +18,51 @@ std::vector<std::string> read_csv_file(const char *filename) {
     return lines;
 }
 
+std::vector<std::string> read_csv_file_limit(const char *filename, unsigned int max_lines) {
+    std::vector<std::string> lines;
+    std::ifstream file(filename);
+
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return lines;
+    }
+
+    char ch;
+    int pos;
+    std::string line;
+    file.seekg(-1,std::ios::end);
+    pos=file.tellg();
+    for(int i=0;i<pos;i++)
+    {
+        ch=file.get();
+
+        if (ch == '\n'){
+            if ( i > 0 ) {
+                reverse(line.begin(), line.end());
+                //std::cout<<line << "\n";
+                lines.push_back(line);
+                line.clear();
+                if (lines.size() == max_lines){
+                    break;
+                }
+            }
+        }else{
+            line += ch;
+        }
+        file.seekg(-2,std::ios::cur);
+    }
+
+    // Reverse the order of the lines to restore their original order
+    std::reverse(lines.begin(), lines.end());
+    //std::cout << "After reverse" << std::endl;
+    //for (int i = 0; i < lines.size(); i++){
+    //    std::cout << lines[i] << std::endl;
+    //}
+    //std::cout << " Total lines read : " << lines.size() << std::endl;
+    file.close();
+    return lines;
+}
+
 template<typename ValueType>
 std::string stringulate(ValueType v)
 {
@@ -38,7 +83,7 @@ std::string readLastMetricsLines(const char *file_name, int to_read, int skip_he
   long unsigned int curr_ts;
 
   if (CSV_DEBUG) {
-    curr_ts = 1680733079562;
+    curr_ts = 1680733078312 + 2000;
   }
   else {
     curr_ts = get_time_milliseconds();
@@ -71,26 +116,15 @@ std::string readLastMetricsLines(const char *file_name, int to_read, int skip_he
   rapidcsv::Document doc(file_name);
   const size_t rowCount = doc.GetRowCount();
   */
-  std::vector<std::string> lines = read_csv_file(file_name);
+
+  //std::vector<std::string> lines = read_csv_file(file_name);
+  std::vector<std::string> lines = read_csv_file_limit(file_name, to_read + 5);
   int rowCount = lines.size();
   std::string metrics_array[to_read];
 
   for (size_t i = rowCount - to_read; i < rowCount; ++i)
   {
     size_t metric_len = 0;
-    /*
-    std::vector<std::string> row = doc.GetRow<std::string>(i);
-    std::string metric_output;
-    for (size_t y = 0; y < row.size(); y++){
-    	std::string value = row[y];
-    	//std::cout << value << "\t";
-    	if (y < row.size() - 1) value += ',';	// needed for the way this info is passed forward in Colosseum
-    	metric_output += value;
-
-    	metric_len += value.length();
-    }
-    metrics_array[j] = metric_output + "\n\0";
-    */
     metrics_array[j] = lines[i] + "\n";
     tot_len += metrics_array[j].length();
     j++; // increment valid metrics counter
@@ -108,8 +142,6 @@ std::string readLastMetricsLines(const char *file_name, int to_read, int skip_he
 
   // copy header
   if (!skip_header) {
-    /*strcpy(output_string, metrics_array[0].c_str());
-    curr_pos += strlen(metrics_array[0].c_str());*/
     output_string += metrics_array[0];
   }
 
@@ -126,7 +158,7 @@ std::string readLastMetricsLines(const char *file_name, int to_read, int skip_he
     // printf("i %d, timestamp %lu, metrics_array[i] %s\n", i, metric_ts, metrics_array[i]);
 
     // save it if recent enough
-    if ((curr_ts - metric_ts) / 1000.0 <= DELTA_TS_S) {
+    if (((curr_ts - metric_ts) / 1000.0) <= DELTA_TS_S) {
       // skip if empty line
       if (strcmp(metrics_array[i].c_str(), "\n") == 0 || strlen(metrics_array[i].c_str()) == 0) {
         continue;
@@ -142,13 +174,6 @@ std::string readLastMetricsLines(const char *file_name, int to_read, int skip_he
            metrics_array[i].erase(start_pos, tmp_ts.length());
       }
 
-      /*if (skip_header && valid_metrics == 0) {
-        strcpy(output_string, metrics_array[i].c_str());
-      }
-      else {
-        //strcat(&(output_string)[curr_pos], metrics_array[i]);
-        strcat(output_string + curr_pos, metrics_array[i].c_str());
-      }*/
       output_string += metrics_array[i];
 
       curr_pos += strlen(metrics_array[i].c_str());

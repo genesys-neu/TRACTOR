@@ -4,6 +4,7 @@ import os
 import time
 import argparse
 import sys
+from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser()
@@ -79,9 +80,9 @@ with open(file_name, 'r') as csvfile:
             Sdata = os.urandom(data_size)
             send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
-        for row in datareader:
+        for row in tqdm(datareader, desc="UE transmission progress.."):
             if row[3] == '172.30.1.1':
-                print('[UE] It is our turn to send')
+                #print('[UE] It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
@@ -90,7 +91,7 @@ with open(file_name, 'r') as csvfile:
 
             else:
                 # we should listen until we get data, or it is our turn to send again
-                print('[UE] listening')
+                #print('[UE] listening')
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
                     if data:
@@ -102,13 +103,13 @@ with open(file_name, 'r') as csvfile:
         while True:
             data, address = rec_sock.recvfrom(4096)
             if data:
-                print("[gNB] Starting experiment")
+                #print("[gNB] Starting experiment")
                 start_time = time.time()
                 break
 
-        for row in datareader:
+        for row in tqdm(datareader, desc="gNB transmission progress.."):
             if row[3] == '172.30.1.250':
-                print('[gNB] It is our turn to send')
+                #print('[gNB] It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
@@ -116,7 +117,7 @@ with open(file_name, 'r') as csvfile:
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
             else:
-                print('[gNB] listening')
+                #print('[gNB] listening')
                 # we should listen until we get data, or it is our turn to send again
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)

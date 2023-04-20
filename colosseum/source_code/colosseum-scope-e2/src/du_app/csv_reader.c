@@ -116,9 +116,10 @@ void readMetricsInteractive(FILE *fp, char (*output_string)[MAX_BUF_SIZE], int m
 }
 
 void append_uint_to_str(unsigned int num, char* str) {
-    char temp[20];
+    char *temp = calloc(10, sizeof(char));
     sprintf(temp, "%u", num);
     strcat(str, temp);
+    free(temp);
 }
 
 void append_string(char **dest, char *src) {
@@ -129,7 +130,7 @@ void append_string(char **dest, char *src) {
     }else{
         *dest = realloc(*dest, (dest_len + src_len + 1) * sizeof(char)); // +1 for null-terminator
     }
-    strcat(*dest, src);
+    strcat(*dest, src); //note: strcat adds the null character at the end of the concatenated string
 }
 
 #define BUFSIZE 512
@@ -175,9 +176,11 @@ void readLastMetricsLines(char *file_name, int to_read, char **output_string, in
       }
 
   }
-  //if (strlen(*output_string) > 1){
-  //  printf("Filled output\n");
-  //}
+
+  if (strlen(*output_string) > 1){
+    size_t num_chars = strlen(*output_string);
+    (*output_string)[num_chars] = '\0';
+  }
 
   if (pclose(p_fp)) {
       printf("Command not found or exited with error status\n");
@@ -210,7 +213,7 @@ void readLastMetricsLines(char *file_name, int to_read, char **output_string, in
 
 
 // get content of specified directory
-/*
+
 int getDirContent(char *directory_name, char (*dir_content)[MAX_BUF_SIZE]) {
 
   DIR *ptr;
@@ -239,7 +242,8 @@ int getDirContent(char *directory_name, char (*dir_content)[MAX_BUF_SIZE]) {
 
   return num_el;
 }
-*/
+
+/*
 // get content of specified directory
 int getDirContent(char *directory_name, char (*dir_content)[MAX_BUF_SIZE]) {
 
@@ -273,23 +277,25 @@ int getDirContent(char *directory_name, char (*dir_content)[MAX_BUF_SIZE]) {
   // return the number of matching files found
   return num_el;
 }
-
+*/
 
 
 // read and assemble metrics to send
 void get_tx_string(char **send_metrics, int lines_to_read) {
 
   int curr_pos = 0;
-
-  char dir_content[1000][MAX_BUF_SIZE];
+  /*
+  char dir_content[1][MAX_BUF_SIZE];
   int dir_el;
   dir_el = getDirContent(METRICS_DIR, dir_content);
-
+  */
+  int dir_el = 1;
+  char *dir_content = "1010123456002_metrics.csv";
   char *metrics_string = "";
   for (int i = 0; i < dir_el; ++i) {
     // assemble path of file to read
-    char file_path[1000] = METRICS_DIR;
-    strcat(file_path, dir_content[i]);
+    char file_path[MAX_BUF_SIZE] = METRICS_DIR;
+    strcat(file_path, dir_content);
 
     // read metrics, always skip header
     readLastMetricsLines(file_path, lines_to_read, &metrics_string, 1);

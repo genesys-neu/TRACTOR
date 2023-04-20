@@ -22,3 +22,7 @@ sshpass -p "ChangeMe" ssh $3 'docker cp /root/logs/cols_maxmin.pkl sample-xapp-2
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/model/ sample-xapp-24:/home/sample-xapp/traffic_gen/.'
 #sshpass -p "ChangeMe" ssh $3 'docker exec sample-xapp-24 ln -s /home/sample-xapp/xapp_control.py  /home/sample-xapp/traffic_gen/xapp_control.py'
 sshpass -p "ChangeMe" ssh $3 'docker exec sample-xapp-24 mv /home/sample-xapp/traffic_gen/run_xapp.sh /home/sample-xapp/. && docker exec sample-xapp-24 chmod +x /home/sample-xapp/run_xapp.sh'
+
+echo -e "*********************\n\tREADME\n*********************"
+echo -e "Now make sure the ODU is running on gNB ($1). If not, you can start it with:\n\tsshpass -p \"scope\" ssh $1\n\tcd /root/radio_code/colosseum-scope-e2/\n\t./run_odu.sh"
+echo -e "Connect to the RIC and start the xapp:\n\tsshpass -p \"ChangeMe\" ssh $3 \n\tdocker exec -it sample-xapp-24 bash \n\t rm /home/*.log # remove previous logs\n\tcd /home/sample-xapp/ \n\t ./run_xapp.sh"

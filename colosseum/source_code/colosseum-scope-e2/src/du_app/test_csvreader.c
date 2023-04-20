@@ -49,14 +49,18 @@ int main() {
         return -1;
     }
 
-    while (fgets(buf, BUFSIZE, p_fp) != NULL) {
+    while (fgets(buf, BUFSIZE, fp) != NULL) {
       if (!(strcmp(buf, "\n") == 0)){
-          append_string(output_string, buf);
+          append_string(&output_metrics, buf);
           valid_metrics++;
           printf("--> %s", buf);
       }
 
-  }
+    }
+    if (strlen(output_metrics) > 1){
+        size_t num_chars = strlen(output_metrics);
+        output_metrics[num_chars + 1] = '\0';
+    }
 
     if (pclose(fp)) {
         printf("Command not found or exited with error status\n");
