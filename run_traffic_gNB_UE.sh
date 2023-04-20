@@ -1,13 +1,15 @@
 #!/bin/bash
-for t in ./raw/*.csv
+# args:
+# $1 : template of csv file to look for
+for t in ./raw/*urll*.csv
 do
   echo "***** Run traffic on gNB *****"
   sshpass -p "scope" ssh $1 "cd /root/traffic_gen && python traffic_gen.py --eNB -f ${t}" &   # this will have to let the next command go through
-  echo "Sleep for 3 secs"
-  sleep 3  # let's wait few seconds
+  echo "Sleep for 5 secs"
+  sleep 5  # let's wait few seconds
   echo "***** Run traffic on UE *****"
-  sshpass -p "scope" ssh $2 "cd /root/traffic_gen && python traffic_gen.py -f ${t}"
-  #wait  # this will wait until all child processes terminates
+  sshpass -p "scope" ssh $2 "cd /root/traffic_gen && python traffic_gen.py -f ${t}" &
+  wait  # this will wait until all child processes terminates
   echo "***** Sleeping... *****"
   sleep 10 # sleep for a few second to allow all the classifier outputs to complete producing files
   echo "***** Copy data *****"

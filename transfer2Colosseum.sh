@@ -5,8 +5,8 @@
 
 #!/bin/bash
 sshpass -p "ChangeMe" ssh $3 'mkdir /root/logs'
-sshpass -p "ChangeMe" scp ../../traffic_gen2/logs/cols_maxmin.pkl $3:/root/logs/.
-sshpass -p "ChangeMe" scp ../../traffic_gen2/logs/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice8_wCQI.pkl $3:/root/logs/.
+sshpass -p "ChangeMe" scp logs/cols_maxmin.pkl $3:/root/logs/.
+#sshpass -p "ChangeMe" scp ../../traffic_gen2/logs/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice8_wCQI.pkl $3:/root/logs/.
 sshpass -p "ChangeMe" ssh $3 'mkdir /root/model'
 sshpass -p "ChangeMe" scp model/model_weights__slice8.pt $3:/root/model/.
 
