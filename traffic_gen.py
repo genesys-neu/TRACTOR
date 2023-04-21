@@ -4,7 +4,7 @@ import os
 import time
 import argparse
 import sys
-from tqdm import tqdm
+
 
 
 parser = argparse.ArgumentParser()
@@ -53,7 +53,17 @@ send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 rec_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 rec_sock.bind(('', local_port))
 
+# iterating through the whole file
+rowcount = 0
+for row in open(file_name, 'r'):
+    rowcount += 1
+# printing the result
+# discard first line
+rowcount -= 1
+print("Number of entries in csv", rowcount)
+
 with open(file_name, 'r') as csvfile:
+
     datareader = csv.reader(csvfile)
     row1 = next(datareader)
 
@@ -80,7 +90,9 @@ with open(file_name, 'r') as csvfile:
             Sdata = os.urandom(data_size)
             send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
-        for row in tqdm(datareader, desc="UE transmission progress.."):
+        for r_ix, row in enumerate(datareader):
+            if r_ix % 100 == 0:
+                print('[UE] Progress '+str(r_ix)+'/'+str(rowcount))
             if row[3] == '172.30.1.1':
                 #print('[UE] It is our turn to send')
                 data_size = int(row[6])-70
@@ -107,7 +119,9 @@ with open(file_name, 'r') as csvfile:
                 start_time = time.time()
                 break
 
-        for row in tqdm(datareader, desc="gNB transmission progress.."):
+        for r_ix, row in enumerate(datareader):
+            if r_ix % 100 == 0:
+                print('[gNB] Progress '+str(r_ix)+'/'+str(rowcount))
             if row[3] == '172.30.1.250':
                 #print('[gNB] It is our turn to send')
                 data_size = int(row[6])-70
