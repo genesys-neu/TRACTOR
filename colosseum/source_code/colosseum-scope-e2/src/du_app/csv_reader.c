@@ -116,7 +116,7 @@ void readMetricsInteractive(FILE *fp, char (*output_string)[MAX_BUF_SIZE], int m
 }
 
 void append_uint_to_str(unsigned int num, char* str) {
-    char *temp = calloc(10, sizeof(char));
+    char *temp = calloc(32, sizeof(char));
     sprintf(temp, "%u", num);
     strcat(str, temp);
     free(temp);
