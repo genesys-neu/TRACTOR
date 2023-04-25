@@ -6,6 +6,7 @@ import argparse
 import sys
 
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--eNB", help="specify this is the base station", action="store_true")
 parser.add_argument("--ip", help="enter the distant end IP address", type=str)
@@ -52,16 +53,26 @@ send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 rec_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 rec_sock.bind(('', local_port))
 
+# iterating through the whole file
+rowcount = 0
+for row in open(file_name, 'r'):
+    rowcount += 1
+# printing the result
+# discard first line
+rowcount -= 1
+print("Number of entries in csv", rowcount)
+
 with open(file_name, 'r') as csvfile:
+
     datareader = csv.reader(csvfile)
     row1 = next(datareader)
 
     if UE:  # The UE should always start
-        print("I am the UE, I start communication")
+        print("[UE] I am the UE, I start communication")
         row2 = next(datareader)
         # print(row2)
         if row2[3] != '172.30.1.1':
-            print('eNB starts, send start message')
+            print('[UE] eNB starts, send start message')
             send_sock.sendto(str.encode('Start'), (Distant_IP, distant_port))
             # we also need to wait and listen for the first message
             while True:
@@ -74,14 +85,16 @@ with open(file_name, 'r') as csvfile:
         else:
             # it is our turn to start
             data_size = int(row2[6])-70
-            print('UE starts')
+            print('[UE] UE starts')
             start_time = time.time()
             Sdata = os.urandom(data_size)
             send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
-        for row in datareader:
+        for r_ix, row in enumerate(datareader):
+            if r_ix % 100 == 0:
+                print('[UE] Progress '+str(r_ix)+'/'+str(rowcount))
             if row[3] == '172.30.1.1':
-                print('It is our turn to send')
+                #print('[UE] It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
@@ -90,25 +103,27 @@ with open(file_name, 'r') as csvfile:
 
             else:
                 # we should listen until we get data, or it is our turn to send again
-                print('listening')
+                #print('[UE] listening')
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)
                     if data:
                         break
 
     else:  # if we are the eNB, we need to wait for a message from the UE before moving on
-        print("waiting for UE")
+        print("[gNB] waiting for UE")
 
         while True:
             data, address = rec_sock.recvfrom(4096)
             if data:
-                print("Starting experiment")
+                #print("[gNB] Starting experiment")
                 start_time = time.time()
                 break
 
-        for row in datareader:
+        for r_ix, row in enumerate(datareader):
+            if r_ix % 100 == 0:
+                print('[gNB] Progress '+str(r_ix)+'/'+str(rowcount))
             if row[3] == '172.30.1.250':
-                print('It is our turn to send')
+                #print('[gNB] It is our turn to send')
                 data_size = int(row[6])-70
                 Sdata = os.urandom(data_size)
                 while time.time()-start_time < float(row[2]):  # but first, we have to check the time!
@@ -116,7 +131,7 @@ with open(file_name, 'r') as csvfile:
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
             else:
-                print('listening')
+                #print('[gNB] listening')
                 # we should listen until we get data, or it is our turn to send again
                 while time.time() - start_time < float(row[2]):
                     data, address = rec_sock.recvfrom(4096)

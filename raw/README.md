@@ -31,3 +31,9 @@ When collecting this data I focused on a specific traffic slice. I caputred all 
 For the embb data, I downloaded several large videos using OneDrive, only caputring OneDrive traffic. This was stationary in ISEC.
 For the urllc data I used Google Meet for live video chat. This was walking outside on Northeastern campus.
 For the mmtc data, I captured all background traffic while not actively using the phone. This was stationary in ISEC.
+
+embb_04_10, mmtc_04_10, urllc_04_10
+For these traces I captured all data on 10 April, stationary, in ISEC.
+The embb data was streaming YouTube.
+The urllc data was video chat over Google Meet.
+The mmtc data was background traffic while not actively using the phone.

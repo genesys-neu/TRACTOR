@@ -1,4 +1,8 @@
-import matplotlib.pyplot as plt
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--path", required=True, help="Path containing the classifier output files for re-played traffic traces")
+args, _ = parser.parse_known_args()
+
 import numpy
 import pickle
 import glob
@@ -10,7 +14,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-PATH='outputs_urllc_mmtc'
+PATH=args.path
+if PATH[-1] == '/': # due to use of os.basename
+    PATH = PATH[:-1]
 
 pkl_list = glob.glob(os.path.join(PATH, 'class_output_*.pkl'))
 classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
@@ -75,7 +81,7 @@ for ix, p in enumerate(pkl_list):
                 # Add the patch to the Axes
                 ax.add_patch(rect)
             os.makedirs(PATH+'/imgs', exist_ok=True)
-            plt.savefig(PATH+'/imgs/outputs_s'+str(head-len(output_list_kpi))+'_e'+str(head)+'.png')
+            plt.savefig(PATH+'/imgs/outputs_s'+os.path.basename(PATH)+str(head-len(output_list_kpi))+'_e'+str(head)+'.png')
             plt.clf()
             # reset output lists
             output_list_kpi = []
@@ -105,7 +111,7 @@ if len(output_list_kpi) > 0:
         # Add the patch to the Axes
         ax.add_patch(rect)
     os.makedirs(PATH+'/imgs', exist_ok=True)
-    plt.savefig(PATH+'/imgs/outputs_s'+str(head-len(output_list_kpi))+'_e'+str(head)+'.pdf')
+    plt.savefig(PATH+'/imgs/outputs_'+os.path.basename(PATH)+'s'+str(head-len(output_list_kpi))+'_e'+str(head)+'.pdf')
     plt.clf()
 
 """

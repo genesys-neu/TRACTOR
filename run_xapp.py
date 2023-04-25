@@ -5,7 +5,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from python.ORAN_dataset import *
 from python.torch_train_ORAN_colosseum import ConvNN as global_model
-
+import time
 from xapp_control import *
 
 
@@ -50,7 +50,8 @@ def main():
     print('Start listening on E2 interface...')
 
     count_pkl = 0
-
+    cont_data_sck = ""
+    isCont = False
     while True:
         data_sck = receive_from_socket(control_sck)
         if len(data_sck) <= 0:
@@ -65,7 +66,66 @@ def main():
             # with open('/home/kpi_new_log.txt', 'a') as f:
             #     f.write('{}\n'.format(data_sck))
 
+            """
+            if data_sck[0] == 'm':
+                print('Multiple recv')  # TODO handle this case
+                if not isCont:
+                    isCont = True   # activate continue mode
+                    cont_data_sck = data_sck[1:]    # init the string
+                else:    # we are already in continue mode
+                    cont_data_sck += data_sck[1:]
+                continue    # don't process the string and continue appending
+            elif isCont:
+                cont_data_sck += data_sck
+                data_sck = cont_data_sck
+                cont_data_sck = ""
+                isCont = False
+            """
+
+
+            data_sck = data_sck.replace(',,', ',')
+            data_sck_m = ''
+
+            if data_sck[0] == 'm':
+                # we need to recive more and piece together the whole message
+                while data_sck[0] == 'm':
+                    data_sck_m = data_sck_m + data_sck[1:]
+
+                    # get more data
+                    data_sck = receive_from_socket(control_sck)
+                    if len(data_sck) <= 0:
+                        if len(data_sck) == 0:
+                            # logging.info('Socket received 0')
+                            continue
+                        else:
+                            logging.info('Negative value for socket')
+                            break
+                    else:
+                        logging.info('Received data: ' + repr(data_sck))
+                        data_sck = data_sck.replace(',,', ',')
+
+                # now we have to get the final message without an m
+                data_sck = receive_from_socket(control_sck)
+                if len(data_sck) <= 0:
+                    if len(data_sck) == 0:
+                        # logging.info('Socket received 0')
+                        continue
+                    else:
+                        logging.info('Negative value for socket')
+                        break
+                else:
+                    logging.info('Received data: ' + repr(data_sck))
+                    data_sck = data_sck.replace(',,', ',')
+                data_sck_m = data_sck_m + data_sck
+
+                #finally rename for the rest of the program
+                data_sck = data_sck_m
+
             kpi_new = np.fromstring(data_sck, sep=',')
+            if kpi_new.shape[0] < 31:
+                continue # discard incomplete KPIs
+                        # [TODO] this is to address the multiple 'm' case, but not ideal like this
+
             # check to see if the recently received KPI is actually new
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
             curr_timestamp = kpi_new[0]
@@ -99,7 +159,7 @@ def main():
                         pred = model(t_kpi)
                         this_class = pred.argmax(1)
                         logging.info('Predicted class ' + str(pred.argmax(1)))
-                        pickle.dump((np_kpi, this_class), open('/home/class_output_'+str(count_pkl)+'.pkl', 'wb'))
+                        pickle.dump((np_kpi, this_class), open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
                         count_pkl += 1
                     except:
                         logging.info('ERROR while predicting class')
