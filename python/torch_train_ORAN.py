@@ -117,9 +117,9 @@ class TransformerNN(nn.Module):
 
         # we will not use the decoder
         # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
-        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, num_feats*2)
+        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, 256)
         self.dropout = torch.nn.Dropout(dropout)
-        self.classifier = torch.nn.Linear(num_feats*2, classes)
+        self.classifier = torch.nn.Linear(256, classes)
         self.logSoftmax = nn.LogSoftmax(dim=1)
     
     def forward(self, src):
