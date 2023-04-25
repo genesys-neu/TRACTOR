@@ -1,9 +1,10 @@
 import argparse
 from typing import Dict
-
+import math
 import matplotlib.pyplot as plt
 import torch
 from torch import nn
+from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
@@ -100,7 +101,125 @@ class ConvNN(nn.Module):
         # return the output predictions
         return output
 
-global_model = ConvNN
+
+class TransformerNN(nn.Module):
+    def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
+                 dropout: float = 0.2, use_pos: bool = False):
+        super(TransformerNN, self).__init__()
+        self.norm = nn.LayerNorm(num_feats)
+        # create the positional encoder
+        self.use_positional_enc = use_pos
+        self.pos_encoder = PositionalEncoding(num_feats + 1, dropout)
+        # define the encoder layers
+        encoder_layers = TransformerEncoderLayer(num_feats, nhead, batch_first=True)
+        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+        self.d_model = num_feats
+
+        # we will not use the decoder
+        # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
+        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, 256)
+        self.dropout = torch.nn.Dropout(dropout)
+        self.classifier = torch.nn.Linear(256, classes)
+        self.logSoftmax = nn.LogSoftmax(dim=1)
+    
+    def forward(self, src):
+        """
+        Args:
+            src: Tensor, shape [batch_size, seq_len, features]
+        Returns:
+            output classes log probabilities
+        """
+        #src = self.norm(src) should not be necessary since output can be already normalized
+        # apply positional encoding if decided
+        if self.use_positional_enc:
+            src = self.pos_encoder(src).squeeze()
+        # pass through encoder layers
+        t_out = self.transformer_encoder(src)
+        # flatten already contextualized KPIs
+        t_out = torch.flatten(t_out, start_dim=1)
+        # Pass through MLP classifier
+        pooler = self.pre_classifier(t_out)
+        pooler = torch.nn.ReLU()(pooler)
+        pooler = self.dropout(pooler)
+        output = self.classifier(pooler)
+        output = self.logSoftmax(output)
+        return output
+
+
+class TransformerNN_v2(nn.Module):
+    def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
+                 dropout: float = 0.2, use_pos: bool = False):
+        super(TransformerNN_v2, self).__init__()
+        self.norm = nn.LayerNorm(num_feats)
+        # create the positional encoder
+        self.use_positional_enc = use_pos
+        self.pos_encoder = PositionalEncoding(num_feats + 1, dropout)
+        # define [CLS] token to be used for classification
+        self.cls_token = torch.nn.Parameter(torch.randn(1, 1, num_feats))
+        # define the encoder layers
+        encoder_layers = TransformerEncoderLayer(num_feats, nhead, batch_first=True)
+        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+        self.d_model = num_feats
+
+        # we will not use the decoder
+        # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
+        self.pre_classifier = torch.nn.Linear(num_feats, num_feats*2)
+        self.dropout = torch.nn.Dropout(0.2)
+        self.classifier = torch.nn.Linear(num_feats*2, classes)
+        self.logSoftmax = nn.LogSoftmax(dim=1)
+    
+    def forward(self, src):
+        """
+        Args:
+            src: Tensor, shape [batch_size, seq_len, features]
+        Returns:
+            output classes log probabilities
+        """
+        cls_tokens = self.cls_token.repeat(src.size(0),1,1)
+        src = torch.column_stack((cls_tokens, src))
+        #src = self.norm(src) should not be necessary since output can be already normalized
+        # apply positional encoding if decided
+        if self.use_positional_enc:
+            src = self.pos_encoder(src).squeeze()
+        t_out = self.transformer_encoder(src)
+        # get hidden state of the [CLS] token
+        t_out = t_out[:,0,:].squeeze()
+        pooler = self.pre_classifier(t_out)
+        pooler = torch.nn.ReLU()(pooler)
+        pooler = self.dropout(pooler)
+        output = self.classifier(pooler)
+        output = self.logSoftmax(output)
+        return output
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        # ToDo: try the following change
+        # pe = torch.zeros(max_len, 1, d_model)
+        # pe[:, 0, 0::2] = torch.sin(position * div_term)
+        # pe[:, 0, 1::2] = torch.cos(position * div_term)
+        # try the following instead
+        pe = torch.zeros(max_len, d_model)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe[:, :-1]
+        pe = pe.unsqueeze(0)
+
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        """
+        Args:
+            x: Tensor, shape [batch_size, seq_len, features]
+        """
+        # x = x + self.pe[:x.size(0)]
+        x = x + self.pe[:, :x.size(1)]
+        return self.dropout(x)
 
 
 def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
@@ -122,6 +241,7 @@ def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
         if batch % 100 == 0:
             loss, current = loss.item(), batch * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
 
 def validate_epoch(dataloader, model, loss_fn, Nclasses, isDebug=False):
     if not isDebug:
@@ -157,6 +277,8 @@ def train_func(config: Dict):
     isDebug = config['isDebug']
     slice_len = config['slice_len']
     num_feats = config['num_feats']
+    global_model = config['global_model']
+    model_postfix = config['model_postfix']
 
     if isDebug:
         worker_batch_size = batch_size
@@ -176,18 +298,27 @@ def train_func(config: Dict):
     if not isDebug:
         model = train.torch.prepare_model(model)
 
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.NLLLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     from torch.optim.lr_scheduler import ReduceLROnPlateau
     
-    scheduler = ReduceLROnPlateau(optimizer, 'min', min_lr=0.00001, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=6, min_lr=0.00001, verbose=True)
     loss_results = []
+    
+    print(model)
+    for name, param in model.named_parameters():
+        print(f'{name:20} {param.numel()} {list(param.shape)}')
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f'TOTAL                {total_params}')
 
+    best_loss = np.inf
+    epochs_wo_improvement = 0
     for e in range(epochs):
         train_epoch(train_dataloader, model, loss_fn, optimizer, isDebug)
         loss = validate_epoch(test_dataloader, model, loss_fn, Nclasses=Nclass, isDebug=isDebug)
         scheduler.step(loss)
         loss_results.append(loss)
+        epochs_wo_improvement += 1
         if not isDebug:
 
             # store checkpoint only if the loss has improved
@@ -198,7 +329,22 @@ def train_func(config: Dict):
             )
 
             session.report(dict(loss=loss), checkpoint=checkpoint)
+        else:
+            if best_loss > loss:
+                epochs_wo_improvement = 0
+                best_loss = loss
+                model_name = f'model.{slice_len}.{model_postfix}.ctrl.pt'
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss,
+                }, os.path.join('./', model_name))
 
+        if epochs_wo_improvement > 12: # early stopping
+            print('------------------------------------')
+            print('Early termination implemented at epoch:', e+1)
+            print('------------------------------------')
+            return loss_results
     # return required for backwards compatibility with the old API
     # TODO(team-ml) clean up and remove return
     return loss_results
@@ -209,6 +355,7 @@ def debug_train_func(config: Dict):
     Nclass = config["Nclass"]
     slice_len = config['slice_len']
     num_feats = config['num_feats']
+    global_model = config['global_model']
     #model = NeuralNetwork()
     model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
     loss_fn = nn.CrossEntropyLoss()
@@ -287,7 +434,10 @@ if __name__ == "__main__":
     parser.add_argument("--test", action="store_true", default=False, help="Testing the model") # TODO visualize capture and then perform classification after loading model
     parser.add_argument("--cp_path", help='Path to the checkpoint to load at test time.')
     parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
+    parser.add_argument("--transformer", default=None, choices=['v1', 'v2'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
     args, _ = parser.parse_known_args()
+    if args.transformer is not None:
+        transformer = TransformerNN if args.transformer == 'v1' else TransformerNN_v2
 
     ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path)
     ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path)
@@ -299,6 +449,8 @@ if __name__ == "__main__":
     train_config['isDebug'] = args.isDebug
     train_config['slice_len'] = ds_info['slice_len']
     train_config['num_feats'] = ds_info['numfeats']
+    train_config['global_model'] = transformer if args.transformer is not None else ConvNN
+    train_config['model_postfix'] = 'trans_' + args.transformer if args.transformer is not None else 'cnn' 
 
     if not args.test:
 
@@ -311,18 +463,20 @@ if __name__ == "__main__":
 
         #debug_train_func(train_config)
     else:
-
         cp_path = args.cp_path
+        global_model = train_config['global_model']
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
-        cp = Checkpoint(local_path=cp_path)
-        model.load_state_dict(cp.to_dict().get("model_weights"))
-
-        # save a new model state using torch functions to allow loading model into gpu
         device = torch.device("cuda")
-        os.makedirs('model',exist_ok=True)
-        model_params_filename =  os.path.join('model', 'model_weights__slice'+str(train_config['slice_len'])+'.pt')
-        torch.save(model.state_dict(), model_params_filename)
-        model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
+        if args.isDebug:
+            model.load_state_dict(torch.load(cp_path, map_location='cuda:0')['model_state_dict'])
+        else:
+            cp = Checkpoint(local_path=cp_path)
+            model.load_state_dict(cp.to_dict().get("model_weights"))
+            # save a new model state using torch functions to allow loading model into gpu
+            os.makedirs('model',exist_ok=True)
+            model_params_filename =  os.path.join('model', 'model_weights__slice'+str(train_config['slice_len'])+'.pt')
+            torch.save(model.state_dict(), model_params_filename)
+            model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
         model.to(device)
 
         """
@@ -374,7 +528,7 @@ if __name__ == "__main__":
             for k in dtrace.keys():
                 num_correct = 0
                 tr = dtrace[k].values
-                correct_class = classmap[k]
+                #correct_class = classmap[k]
 
                 for t in range(tr.shape[0]):
                     if t + train_config['slice_len'] < tr.shape[0]:
@@ -383,6 +537,11 @@ if __name__ == "__main__":
                         input = input.to(device)    # transfer input data to GPU
                         pred = model(input)
                         class_ix = pred.argmax(1)
+                        zeros = (input_sample == 0).astype(int).sum(axis=1)
+                        if (zeros > 10).all():
+                            correct_class = 3 # control if all KPIs rows have > 10 zeros
+                        else: 
+                            correct_class = classmap[k]
                         co = class_ix.cpu().numpy()[0]
                         #if co == correct_class:
                         #    num_correct += 1
@@ -393,7 +552,7 @@ if __name__ == "__main__":
 
                     #mean, stddev = timing_inference_GPU(input, model)
                 #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
-            trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(dtrace.keys()))))
+            trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
             for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
                 sum_row = np.sum(trial_cm[r, :])
                 trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
@@ -401,7 +560,7 @@ if __name__ == "__main__":
             print(trial_cm)
 
         cm = conf_mat(y_true,y_output, labels=list(range(len(classmap.keys()))))
-
+        cm = cm.astype('float')
         for r in range(cm.shape[0]):  # for each row in the confusion matrix
             sum_row = np.sum(cm[r, :])
             cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
@@ -411,8 +570,9 @@ if __name__ == "__main__":
         df_cm = pd.DataFrame(cm, axis_lbl, axis_lbl)
         # plt.figure(figsize=(10,7))
         sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, annot=True, annot_kws={"size": 16})  # font size
+        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16})  # font size
         plt.show()
+        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}_ctrlcorrected.pdf")
         plt.clf()
         print('-------------------------------------------')
         print('-------------------------------------------')
