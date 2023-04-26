@@ -28,12 +28,18 @@ def natural_keys(text):
 import torch
 
 
-def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, colormap = {0: 'y', 1: 'r', 2: 'g', 3: 'b'}):
+def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, colormap = {0: 'y', 1: 'r', 2: 'g', 3: 'b'}, save_plain=False):
     imgout = np.array(output_list_kpi).T
     # Create figure and axes
     fig, ax = plt.subplots(figsize=(50, 5))
     # Display the image
     ax.imshow(imgout, extent=[0, len(output_list_kpi), 0, imgout.shape[0]], aspect='auto', vmin=0., vmax=1.)
+    if save_plain:
+        os.makedirs(img_path + '/imgs', exist_ok=True)
+        plt.savefig(img_path + '/imgs/outputs_' + os.path.basename(img_path) + 's' + str(
+            head - len(output_list_kpi)) + '_e' + str(
+            head) + '__plain.pdf')
+
     for ix, label in enumerate(output_list_y):
         if isinstance(label, int) or isinstance(label, numpy.int64):
             lbl = label

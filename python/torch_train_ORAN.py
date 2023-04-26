@@ -555,6 +555,8 @@ if __name__ == "__main__":
                                 correct_class = 3 # control if all KPIs rows have > 10 zeros
                             else: 
                                 correct_class = classmap[k]
+                        else:
+                            correct_class = classmap[k]
                         co = class_ix.cpu().numpy()[0]
                         #if co == correct_class:
                         #    num_correct += 1
@@ -570,7 +572,7 @@ if __name__ == "__main__":
                 assert (len(output_list_kpi) == len(output_list_y))
                 plot_trace_class(output_list_kpi, output_list_y,
                                  'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(
-                                     tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi))
+                                     tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi), save_plain=True)
             trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
 
             for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
