@@ -84,9 +84,42 @@ def main():
 
 
             data_sck = data_sck.replace(',,', ',')
+            data_sck_m = ''
 
             if data_sck[0] == 'm':
-                data_sck = data_sck[1:]
+                # we need to recive more and piece together the whole message
+                while data_sck[0] == 'm':
+                    data_sck_m = data_sck_m + data_sck[1:]
+
+                    # get more data
+                    data_sck = receive_from_socket(control_sck)
+                    if len(data_sck) <= 0:
+                        if len(data_sck) == 0:
+                            # logging.info('Socket received 0')
+                            continue
+                        else:
+                            logging.info('Negative value for socket')
+                            break
+                    else:
+                        logging.info('Received data: ' + repr(data_sck))
+                        data_sck = data_sck.replace(',,', ',')
+
+                # now we have to get the final message without an m
+                data_sck = receive_from_socket(control_sck)
+                if len(data_sck) <= 0:
+                    if len(data_sck) == 0:
+                        # logging.info('Socket received 0')
+                        continue
+                    else:
+                        logging.info('Negative value for socket')
+                        break
+                else:
+                    logging.info('Received data: ' + repr(data_sck))
+                    data_sck = data_sck.replace(',,', ',')
+                data_sck_m = data_sck_m + data_sck
+
+                #finally rename for the rest of the program
+                data_sck = data_sck_m
 
             kpi_new = np.fromstring(data_sck, sep=',')
             if kpi_new.shape[0] < 31:
