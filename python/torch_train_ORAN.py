@@ -20,6 +20,12 @@ from ORAN_dataset import load_csv_traces
 from sklearn.metrics import confusion_matrix as conf_mat
 import seaborn as sn
 
+import os
+proj_root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),os.pardir))
+import sys
+sys.path.append(proj_root_dir)
+from colosseum.visualize_inout import plot_trace_class
+
 #ds_train = ORANTracesDataset('train_in__Trial1_Trial2_Trial3.pkl', 'train_lbl__Trial1_Trial2_Trial3.pkl')
 #ds_test = ORANTracesDataset('valid_in__Trial1_Trial2_Trial3.pkl', 'valid_lbl__Trial1_Trial2_Trial3.pkl')
 # ds_train = ORANTracesDataset('train_in__Trial1_Trial2.pkl', 'train_lbl__Trial1_Trial2.pkl')
@@ -439,7 +445,6 @@ if __name__ == "__main__":
     args, _ = parser.parse_known_args()
     if args.transformer is not None:
         transformer = TransformerNN if args.transformer == 'v1' else TransformerNN_v2
-
     ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path)
     ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path)
 
@@ -450,8 +455,11 @@ if __name__ == "__main__":
     train_config['isDebug'] = args.isDebug
     train_config['slice_len'] = ds_info['slice_len']
     train_config['num_feats'] = ds_info['numfeats']
-    train_config['global_model'] = transformer if args.transformer is not None else ConvNN
-    train_config['model_postfix'] = 'trans_' + args.transformer if args.transformer is not None else 'cnn' 
+    if args.transformer is None:
+        train_config['global_model'] = ConvNN
+    else:
+        train_config['global_model'] = transformer
+    train_config['model_postfix'] = 'trans_' + args.transformer if args.transformer is not None else 'cnn'
 
     if not args.test:
         check_zeros = args.ds_file.split('_')[-2] == 'ctrlcorrected'
@@ -532,7 +540,8 @@ if __name__ == "__main__":
                 num_correct = 0
                 tr = dtrace[k].values
                 #correct_class = classmap[k]
-
+                output_list_kpi = []
+                output_list_y = []
                 for t in range(tr.shape[0]):
                     if t + train_config['slice_len'] < tr.shape[0]:
                         input_sample = tr[t:t + train_config['slice_len']]
@@ -553,10 +562,17 @@ if __name__ == "__main__":
                         y_output.append(co)
                         trial_y_true.append(correct_class)
                         trial_y_output.append(co)
+                        output_list_kpi.append(tr[t])
+                        output_list_y.append(co)
 
                     #mean, stddev = timing_inference_GPU(input, model)
                 #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
+                assert (len(output_list_kpi) == len(output_list_y))
+                plot_trace_class(output_list_kpi, output_list_y,
+                                 'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(
+                                     tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi))
             trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
+
             for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
                 sum_row = np.sum(trial_cm[r, :])
                 trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
