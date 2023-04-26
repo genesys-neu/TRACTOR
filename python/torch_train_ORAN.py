@@ -269,7 +269,7 @@ def validate_epoch(dataloader, model, loss_fn, Nclasses, isDebug=False):
     return test_loss
 
 
-def train_func(config: Dict):
+def train_func(config: Dict, check_zeros: bool):
     batch_size = config["batch_size"]
     lr = config["lr"]
     epochs = config["epochs"]
@@ -333,7 +333,8 @@ def train_func(config: Dict):
             if best_loss > loss:
                 epochs_wo_improvement = 0
                 best_loss = loss
-                model_name = f'model.{slice_len}.{model_postfix}.ctrl.pt'
+                ctrl_suffix = '.ctrl' if check_zeros else ''
+                model_name = f'model.{slice_len}.{model_postfix}{ctrl_suffix}.pt'
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
@@ -453,17 +454,19 @@ if __name__ == "__main__":
     train_config['model_postfix'] = 'trans_' + args.transformer if args.transformer is not None else 'cnn' 
 
     if not args.test:
-
+        check_zeros = args.ds_file.split('_')[-2] == 'ctrlcorrected'
         if not train_config['isDebug']:
             import ray
             ray.init(address=args.address)
             train_ORAN_ds(num_workers=args.num_workers, use_gpu=args.use_gpu)
         else:
-            train_func(train_config)
+            train_func(train_config, check_zeros)
 
         #debug_train_func(train_config)
     else:
         cp_path = args.cp_path
+        check_zeros = cp_path.split('/')[-1].split('.')[-1] == 'ctrl' # check if model trained under label correction
+
         global_model = train_config['global_model']
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
         device = torch.device("cuda")
@@ -537,11 +540,12 @@ if __name__ == "__main__":
                         input = input.to(device)    # transfer input data to GPU
                         pred = model(input)
                         class_ix = pred.argmax(1)
-                        zeros = (input_sample == 0).astype(int).sum(axis=1)
-                        if (zeros > 10).all():
-                            correct_class = 3 # control if all KPIs rows have > 10 zeros
-                        else: 
-                            correct_class = classmap[k]
+                        if check_zeros:
+                            zeros = (input_sample == 0).astype(int).sum(axis=1)
+                            if (zeros > 10).all():
+                                correct_class = 3 # control if all KPIs rows have > 10 zeros
+                            else: 
+                                correct_class = classmap[k]
                         co = class_ix.cpu().numpy()[0]
                         #if co == correct_class:
                         #    num_correct += 1
@@ -563,7 +567,7 @@ if __name__ == "__main__":
         cm = cm.astype('float')
         for r in range(cm.shape[0]):  # for each row in the confusion matrix
             sum_row = np.sum(cm[r, :])
-            cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
+            cm[r, :] = round(cm[r, :] / sum_row  * 100., 2)# compute in percentage
 
 
         axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if cm.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
@@ -572,7 +576,8 @@ if __name__ == "__main__":
         sn.set(font_scale=1.4)  # for label size
         sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16})  # font size
         plt.show()
-        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}_ctrlcorrected.pdf")
+        name_suffix = '_ctrlcorrected' if check_zeros else ''
+        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{name_suffix}.pdf")
         plt.clf()
         print('-------------------------------------------')
         print('-------------------------------------------')

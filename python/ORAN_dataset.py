@@ -40,8 +40,10 @@ def load_csv_traces(trials, data_path, norm_params=None):
 
     return trials_traces
 
-def check_slices(data, index):
+def check_slices(data, index, check_zeros=False):
     labels = np.ones((data.shape[0],), dtype=np.int32)*index
+    if not check_zeros:
+        return labels
     for i in range(data.shape[0]):
         sl = data[i]
         zeros = (sl == 0).astype(int).sum(axis=1)
@@ -51,7 +53,7 @@ def check_slices(data, index):
         
 
 
-def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc'):
+def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc', check_zeros=False):
 
     isControlClass = True if 'c' in mode else False
     trials_in = []
@@ -85,15 +87,15 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
                 if ix == 0:
                     print("\teMBB class")
                     embb_data = new_ds
-                    embb_labels = check_slices(embb_data, ix) # labels are numbers (i.e. no 1 hot encoded)
+                    embb_labels = check_slices(embb_data, ix, check_zeros) # labels are numbers (i.e. no 1 hot encoded)
                 elif ix == 1:
                     print("\tMMTc class")
                     mmtc_data = new_ds
-                    mmtc_labels = check_slices(mmtc_data, ix)
+                    mmtc_labels = check_slices(mmtc_data, ix, check_zeros)
                 elif ix == 2:
                     print("\tURLLc class")
                     urll_data = new_ds
-                    urll_labels = check_slices(urll_data, ix)
+                    urll_labels = check_slices(urll_data, ix, check_zeros)
                 elif ix == 3:
                     print("\tControl / CTRL class")
                     ctrl_data = new_ds
@@ -249,6 +251,7 @@ if __name__ == "__main__":
     parser.add_argument("--filemarker", default='', help="Suffix added to the file as marker")
     parser.add_argument("--slicelen", default=4, type=int, help="Specify the slices lengths while generating the dataset.")
     parser.add_argument("--ds_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/", help="Specify path where dataset files are stored")
+    parser.add_argument("--check_zeros", action="store_true", default=False, help="Assign ctrl label to slices which all their rows contain >10 zeros")
     parser.add_argument("--mode", default='emuc', choices=['emu', 'emuc', 'co'],
                         help='This argument specifies which class to use when generating the dataset: '
                              '1) "emu" means all classes except CTRL; '
@@ -258,7 +261,7 @@ if __name__ == "__main__":
 
     path = args.ds_path
     trials = args.trials
-    dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path, mode=args.mode)
+    dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path, mode=args.mode, check_zeros=args.check_zeros)
 
     file_suffix = ''
     for t in trials:
@@ -268,8 +271,8 @@ if __name__ == "__main__":
 
     file_suffix += '__slice'+str(args.slicelen)
     file_suffix += '_'+args.filemarker if args.filemarker else ''
-
-    pickle.dump(dataset, open(os.path.join(path, 'dataset__' + args.mode + '__' +file_suffix + '_ctrlcorrected_' + '.pkl'), 'wb'))
+    zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
+    pickle.dump(dataset, open(os.path.join(path, 'dataset__' + args.mode + '__' +file_suffix + zeros_suffix + '.pkl'), 'wb'))
 
     # save separately maxmin normalization parameters for each column/feature
     norm_param_path = os.path.join(path,'cols_maxmin.pkl')
@@ -282,12 +285,3 @@ if __name__ == "__main__":
 
     if save_norm_param:
         pickle.dump(cols_maxmin, open(norm_param_path, 'wb'))
-
-
-
-
-
-
-
-
-
