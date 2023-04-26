@@ -70,9 +70,9 @@ for ix, p in enumerate(pkl_list):
             # first, let's plot everything until now and empty the output buffer
             imgout = np.array(output_list_kpi).T
             # Create figure and axes
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(50, 5))
             # Display the image
-            ax.imshow(imgout, vmin=0., vmax=1.)
+            ax.imshow(imgout, extent=[0,len(output_list_kpi),0,kpis.shape[1]], aspect='auto', vmin=0., vmax=1.)
             for ix, label in enumerate(output_list_y):
                 lbl = label.numpy()[0]
                 # Create a Rectangle patch
@@ -81,7 +81,7 @@ for ix, p in enumerate(pkl_list):
                 # Add the patch to the Axes
                 ax.add_patch(rect)
             os.makedirs(PATH+'/imgs', exist_ok=True)
-            plt.savefig(PATH+'/imgs/outputs_s'+os.path.basename(PATH)+str(head-len(output_list_kpi))+'_e'+str(head)+'.png')
+            plt.savefig(PATH+'/imgs/outputs_'+os.path.basename(PATH)+'s'+str(head-len(output_list_kpi))+'_e'+str(head)+'.pdf')
             plt.clf()
             # reset output lists
             output_list_kpi = []
