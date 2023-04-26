@@ -567,7 +567,7 @@ if __name__ == "__main__":
         cm = cm.astype('float')
         for r in range(cm.shape[0]):  # for each row in the confusion matrix
             sum_row = np.sum(cm[r, :])
-            cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
+            cm[r, :] = round(cm[r, :] / sum_row  * 100., 2)# compute in percentage
 
 
         axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if cm.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
