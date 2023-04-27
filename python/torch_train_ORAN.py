@@ -540,12 +540,11 @@ if __name__ == "__main__":
                         input = input.to(device)    # transfer input data to GPU
                         pred = model(input)
                         class_ix = pred.argmax(1)
+                        correct_class = classmap[k]
                         if check_zeros:
                             zeros = (input_sample == 0).astype(int).sum(axis=1)
                             if (zeros > 10).all():
                                 correct_class = 3 # control if all KPIs rows have > 10 zeros
-                            else: 
-                                correct_class = classmap[k]
                         co = class_ix.cpu().numpy()[0]
                         #if co == correct_class:
                         #    num_correct += 1
