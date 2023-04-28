@@ -421,6 +421,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", "-n", type=int, default=2, help="Sets number of workers for training.")
     parser.add_argument("--use-gpu", action="store_true", default=False, help="Enables GPU training")
     parser.add_argument("--test", action="store_true", default=False, help="Testing the model") # TODO visualize capture and then perform classification after loading model
+    parser.add_argument("--relabel_test", action="store_true", default=False, help="Perform ctrl label correction during testing time") 
     parser.add_argument("--cp_path", help='Path to the checkpoint to load at test time.')
     parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
     parser.add_argument("--transformer", default=None, choices=['v1', 'v2'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
@@ -455,7 +456,8 @@ if __name__ == "__main__":
         #debug_train_func(train_config)
     else:
         cp_path = args.cp_path
-        check_zeros = cp_path.split('/')[-1].split('.')[-1] == 'ctrl' # check if model trained under label correction
+        check_zeros = args.relabel_test
+        ctrl_flag = cp_path.split('/')[-1].split('.')[-1] == 'ctrl' # check if model trained under label correction
 
         global_model = train_config['global_model']
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
@@ -531,14 +533,11 @@ if __name__ == "__main__":
                         input = input.to(device)    # transfer input data to GPU
                         pred = model(input)
                         class_ix = pred.argmax(1)
+                        correct_class = classmap[k]
                         if check_zeros:
                             zeros = (input_sample == 0).astype(int).sum(axis=1)
                             if (zeros > 10).all():
                                 correct_class = 3 # control if all KPIs rows have > 10 zeros
-                            else: 
-                                correct_class = classmap[k]
-                        else:
-                            correct_class = classmap[k]
                         co = class_ix.cpu().numpy()[0]
                         #if co == correct_class:
                         #    num_correct += 1
@@ -559,6 +558,8 @@ if __name__ == "__main__":
 
             for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
                 sum_row = np.sum(trial_cm[r, :])
+                if sum_row == 0:
+                    sum_row = 1
                 trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
             print('Confusion Matrix (%)')
             print(trial_cm)
@@ -567,17 +568,18 @@ if __name__ == "__main__":
         cm = cm.astype('float')
         for r in range(cm.shape[0]):  # for each row in the confusion matrix
             sum_row = np.sum(cm[r, :])
-            cm[r, :] = round(cm[r, :] / sum_row  * 100., 2)# compute in percentage
+            cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
 
 
         axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if cm.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
         df_cm = pd.DataFrame(cm, axis_lbl, axis_lbl)
         # plt.figure(figsize=(10,7))
         sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16})  # font size
+        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16}, fmt='.1f')  # font size
         plt.show()
         name_suffix = '_ctrlcorrected' if check_zeros else ''
-        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{name_suffix}.pdf")
+        add_ctrl = '.ctrl' if ctrl_flag else ''
+        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}.pdf")
         plt.clf()
         print('-------------------------------------------')
         print('-------------------------------------------')
@@ -588,11 +590,40 @@ if __name__ == "__main__":
         #plt.imshow(tr[:1000, :].T)
         #plt.show()
 
+        ###################### TESTING WITH VALIDATION DATA #########################
+        test_dataloader = DataLoader(ds_test, batch_size=train_config['batch_size'], shuffle=False)
 
-
-
-
-
+        size = len(test_dataloader.dataset)
+        model.eval()
+        correct = 0
+        conf_matrix = np.zeros((train_config['Nclass'], train_config['Nclass']))
+        with torch.no_grad():
+            for X, y in test_dataloader:
+                X = X.to(device)
+                pred = model(X)
+                correct += (pred.cpu().argmax(1) == y).type(torch.float).sum().item()
+                conf_matrix += conf_mat(y, pred.cpu().argmax(1), labels=list(range(train_config['Nclass'])))
+        correct /= size
+        print(
+            f"Test Error for model {ds_info['slice_len']}.{train_config['model_postfix']}: \n "
+            f"Accuracy: {(100 * correct):>0.1f}%"
+        )
+        conf_matrix = conf_matrix.astype('float')
+        for r in range(conf_matrix.shape[0]):  # for each row in the confusion matrix
+            sum_row = np.sum(conf_matrix[r, :])
+            conf_matrix[r, :] = conf_matrix[r, :] / sum_row  * 100. # compute in percentage
+        df_cm = pd.DataFrame(conf_matrix, axis_lbl, axis_lbl)
+        # plt.figure(figsize=(10,7))
+        sn.set(font_scale=1.4)  # for label size
+        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16}, fmt='.1f')  # font size
+        plt.show()
+        name_suffix = '_ctrlcorrected' if args.ds_file.split('_')[-2] == 'ctrlcorrected' else ''
+        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}_test.pdf")
+        plt.clf()
+        print('-------------------------------------------')
+        print('-------------------------------------------')
+        print('Global confusion matrix (%) (validation split)')
+        print(conf_matrix)
 
 
 
