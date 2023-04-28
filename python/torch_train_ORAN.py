@@ -560,6 +560,8 @@ if __name__ == "__main__":
             trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
             for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
                 sum_row = np.sum(trial_cm[r, :])
+                if sum_row == 0:
+                    sum_row = 1
                 trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
             print('Confusion Matrix (%)')
             print(trial_cm)
@@ -568,14 +570,14 @@ if __name__ == "__main__":
         cm = cm.astype('float')
         for r in range(cm.shape[0]):  # for each row in the confusion matrix
             sum_row = np.sum(cm[r, :])
-            cm[r, :] = round(cm[r, :] / sum_row  * 100., 2)# compute in percentage
+            cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
 
 
         axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if cm.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
         df_cm = pd.DataFrame(cm, axis_lbl, axis_lbl)
         # plt.figure(figsize=(10,7))
         sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16})  # font size
+        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16}, fmt='.1f')  # font size
         plt.show()
         name_suffix = '_ctrlcorrected' if check_zeros else ''
         add_ctrl = '.ctrl' if ctrl_flag else ''
@@ -599,18 +601,23 @@ if __name__ == "__main__":
         conf_matrix = np.zeros((train_config['Nclass'], train_config['Nclass']))
         with torch.no_grad():
             for X, y in test_dataloader:
+                X = X.to(device)
                 pred = model(X)
-                correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-                conf_matrix += conf_mat(y, pred.argmax(1), labels=list(range(train_config['Nclass'])))
+                correct += (pred.cpu().argmax(1) == y).type(torch.float).sum().item()
+                conf_matrix += conf_mat(y, pred.cpu().argmax(1), labels=list(range(train_config['Nclass'])))
         correct /= size
         print(
             f"Test Error for model {ds_info['slice_len']}.{train_config['model_postfix']}: \n "
-            f"Accuracy: {(100 * correct):>0.1f}%, "
+            f"Accuracy: {(100 * correct):>0.1f}%"
         )
+        conf_matrix = conf_matrix.astype('float')
+        for r in range(conf_matrix.shape[0]):  # for each row in the confusion matrix
+            sum_row = np.sum(conf_matrix[r, :])
+            conf_matrix[r, :] = conf_matrix[r, :] / sum_row  * 100. # compute in percentage
         df_cm = pd.DataFrame(conf_matrix, axis_lbl, axis_lbl)
         # plt.figure(figsize=(10,7))
         sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16})  # font size
+        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16}, fmt='.1f')  # font size
         plt.show()
         name_suffix = '_ctrlcorrected' if args.ds_file.split('_')[-2] == 'ctrlcorrected' else ''
         plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}_test.pdf")
