@@ -38,24 +38,6 @@ train_config = {"lr": 1e-3, "batch_size": 512, "epochs": 350}
 
 
 # Define model
-class NeuralNetwork(nn.Module):
-    def __init__(self, classes=3):
-        super(NeuralNetwork, self).__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(72, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, classes)
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
-# Define model
 class ConvNN(nn.Module):
     def __init__(self, numChannels=1, slice_len=4, num_feats=18, classes=3):
         super(ConvNN, self).__init__()

@@ -28,13 +28,13 @@ def natural_keys(text):
 import torch
 
 
-def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, colormap = {0: 'y', 1: 'r', 2: 'g', 3: 'b'}, save_plain=False):
+def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, colormap = {0: 'y', 1: 'r', 2: 'g', 3: 'b'}, save_plain_img=False):
     imgout = np.array(output_list_kpi).T
     # Create figure and axes
     fig, ax = plt.subplots(figsize=(50, 5))
     # Display the image
     ax.imshow(imgout, extent=[0, len(output_list_kpi), 0, imgout.shape[0]], aspect='auto', vmin=0., vmax=1.)
-    if save_plain:
+    if save_plain_img:
         os.makedirs(img_path + '/imgs', exist_ok=True)
         plt.savefig(img_path + '/imgs/outputs_' + os.path.basename(img_path) + 's' + str(
             head - len(output_list_kpi)) + '_e' + str(
@@ -101,7 +101,7 @@ if __name__ == "__main__":
             else:
                 print('Kpis', ix, 'NOT contiguous')
                 # first, let's plot everything until now and empty the output buffer
-                plot_trace_class(output_list_kpi, output_list_y, slice_len, head, PATH)
+                plot_trace_class(output_list_kpi, output_list_y, PATH, slice_len, head, save_plain_img=True)
                 # reset output lists
                 output_list_kpi = []
                 output_list_y = []
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     if len(output_list_kpi) > 0:
         # let's print the accumulated KPI inputs and relative outputs
         imgout = np.array(output_list_kpi).T
-        plot_trace_class(output_list_kpi, output_list_y, slice_len, head, PATH)
+        plot_trace_class(output_list_kpi, output_list_y, PATH, slice_len, head, save_plain_img=True)
 
     """
     print('Correct % ', num_correct/len(pkl_list)*100)
