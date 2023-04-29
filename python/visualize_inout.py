@@ -55,11 +55,14 @@ if __name__ == "__main__":
     parser.add_argument("--slicelen", choices=[4, 8, 16, 32, 64], type=int, default=32, help="Specify the slicelen to determine the classifier to load")
     parser.add_argument("--model", default='../model/model.32.cnn.pt', help="Specify the Torch model to load" )
     parser.add_argument("--Nclasses", default=4, help="Used to initialize the model")
+    parser.add_argument("--chZeros", default=False, help="At test time, don't count the occurrences of ctrl class")
     args, _ = parser.parse_known_args()
 
     PATH = args.path
     if PATH[-1] == '/':  # due to use of os.basename
         PATH = PATH[:-1]
+
+    check_zeros = args.chZeros
 
     if args.mode == 'pre-comp':
         slice_len = args.slicelen
@@ -154,6 +157,8 @@ if __name__ == "__main__":
 
     elif args.mode == 'inference':
 
+
+
         if 'cnn' in args.model:
             global_model = ConvNN
         else:
@@ -168,6 +173,19 @@ if __name__ == "__main__":
             model.load_state_dict(torch.load(args.model, map_location='cuda:0')['model_state_dict'])
             model.to(device)
             output_list_y = []
+            if 'embb' in os.path.basename(p):
+                correct_class = classmap['embb']
+            elif 'mmtc' in os.path.basename(p):
+                correct_class = classmap['mmtc']
+            elif 'urll' in os.path.basename(p):
+                correct_class = classmap['urll']
+            else:
+                correct_class = classmap['ctrl']
+
+            num_correct = 0
+            num_samples = 0
+            num_verified_ctrl = 0
+            num_heuristic_ctrl = 0
             for t in range(kpis.shape[0]):
                 if t + args.slicelen < kpis.shape[0]:
                     input_sample = kpis[t:t + args.slicelen]
@@ -175,10 +193,29 @@ if __name__ == "__main__":
                     input = input.to(device)  # transfer input data to GPU
                     pred = model(input)
                     class_ix = pred.argmax(1)
-                    co = class_ix.cpu().numpy()[0]
+                    co = int(class_ix.cpu().numpy()[0])
                     output_list_y.append(co)
+                    if check_zeros:
+                        zeros = (input_sample == 0).astype(int).sum(axis=1)
+                        if (zeros > 10).all():
+                            num_heuristic_ctrl += 1
+                            if co == classmap['ctrl']:
+                                num_verified_ctrl += 1  #  classifier and heuristic for control traffic agrees
+                                continue #skip this sample
 
-            plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix='_slice'+str(args.slicelen))
+                    num_correct += 1 if (co == correct_class) else 0
+                    num_samples += 1
+
+            mypost = '_slice' + str(args.slicelen)
+            mypost += '_chZero' if check_zeros else ''
+            plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost)
+            print("Correct classification for traffic type (%): ", (num_correct / num_samples)*100., "num correct =", num_correct, ", num classifications =", num_samples)
+
+            if check_zeros:
+                unique, counts = np.unique(output_list_y, return_counts=True)
+                count_class = dict(zip(unique, counts))
+                if 3 in count_class.keys():
+                    print("Percent of verified ctrl (through heuristic): ", (num_verified_ctrl / num_heuristic_ctrl)*100. )
 
 
 
