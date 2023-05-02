@@ -3,6 +3,7 @@ from typing import Dict
 import math
 import matplotlib.pyplot as plt
 import torch
+import time
 from torch import nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import DataLoader
@@ -301,8 +302,10 @@ def train_func(config: Dict, check_zeros: bool):
 
     best_loss = np.inf
     epochs_wo_improvement = 0
+    times = []
     for e in range(epochs):
-        train_epoch(train_dataloader, model, loss_fn, optimizer, isDebug)
+        ep_time = train_epoch(train_dataloader, model, loss_fn, optimizer, isDebug)
+        times.append(ep_time)
         loss = validate_epoch(test_dataloader, model, loss_fn, Nclasses=Nclass, isDebug=isDebug)
         scheduler.step(loss)
         loss_results.append(loss)
@@ -323,16 +326,23 @@ def train_func(config: Dict, check_zeros: bool):
                 best_loss = loss
                 ctrl_suffix = '.ctrl' if check_zeros else ''
                 model_name = f'model.{slice_len}.{model_postfix}{ctrl_suffix}.pt'
-                torch.save({
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': loss,
-                }, os.path.join('./', model_name))
+                # torch.save({
+                #     'model_state_dict': model.state_dict(),
+                #     'optimizer_state_dict': optimizer.state_dict(),
+                #     'loss': loss,
+                # }, os.path.join('./', model_name))
 
         if epochs_wo_improvement > 12: # early stopping
             print('------------------------------------')
             print('Early termination implemented at epoch:', e+1)
             print('------------------------------------')
+            print(f'Training time analysis for model {config["model_postfix"]} with slice {slice_len}:')
+            sd = np.std(times)
+            mean = np.mean(times)
+            print(f'Mean: {mean}, std: {sd}')
+            with open('tr_time.txt', 'a') as f:
+                f.write(f'Model {config["model_postfix"]} with slice {slice_len}:\n')
+                f.write(f'Mean: {mean}, std: {sd}, num. epochs: {e+1}\n')
             return loss_results
     # return required for backwards compatibility with the old API
     # TODO(team-ml) clean up and remove return
