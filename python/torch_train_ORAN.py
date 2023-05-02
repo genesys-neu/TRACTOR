@@ -623,7 +623,7 @@ if __name__ == "__main__":
             df_cm = pd.DataFrame(conf_matrix, axis_lbl, axis_lbl)
             # plt.figure(figsize=(10,7))
             sn.set(font_scale=1.4)  # for label size
-            sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b_r", as_cmap=True), annot_kws={"size": 16}, fmt='.1f')  # font size
+            sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b", as_cmap=True), annot_kws={"size": 16}, fmt='.1f')  # font size
             plt.show()
             add_ctrl = '.ctrl' if ctrl_flag else ''
             name_suffix = '_ctrlcorrected' if args.ds_file.split('_')[-2] == 'ctrlcorrected' else ''
@@ -634,8 +634,8 @@ if __name__ == "__main__":
             print(conf_matrix)
             # Inference time analysis
             inputs, _ = next(iter(test_dataloader))  
-            sample_input = inputs[0]
-            print(sample_input.shape)
+            sample_input = torch.unsqueeze(inputs[0], 0)
+            sample_input = sample_input.to(device)
             m, sd = timing_inference_GPU(sample_input, model)
             print('-------------------------------------------')
             print('Inference time analysis:')
