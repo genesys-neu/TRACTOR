@@ -420,7 +420,7 @@ if __name__ == "__main__":
     parser.add_argument("--address", required=False, type=str, help="the address to use for Ray")
     parser.add_argument("--num-workers", "-n", type=int, default=2, help="Sets number of workers for training.")
     parser.add_argument("--use-gpu", action="store_true", default=False, help="Enables GPU training")
-    parser.add_argument("--test", action="store_true", default=False, help="Testing the model") # TODO visualize capture and then perform classification after loading model
+    parser.add_argument("--test", default=None, choices=['val', 'traces'], help="Testing the model") # TODO visualize capture and then perform classification after loading model
     parser.add_argument("--relabel_test", action="store_true", default=False, help="Perform ctrl label correction during testing time") 
     parser.add_argument("--cp_path", help='Path to the checkpoint to load at test time.')
     parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
@@ -444,7 +444,7 @@ if __name__ == "__main__":
         train_config['global_model'] = transformer
     train_config['model_postfix'] = 'trans_' + args.transformer if args.transformer is not None else 'cnn'
 
-    if not args.test:
+    if args.test is None:
         check_zeros = args.ds_file.split('_')[-2] == 'ctrlcorrected'
         if not train_config['isDebug']:
             import ray
@@ -454,7 +454,7 @@ if __name__ == "__main__":
             train_func(train_config, check_zeros)
 
         #debug_train_func(train_config)
-    else:
+    else: 
         cp_path = args.cp_path
         check_zeros = args.relabel_test
         ctrl_flag = cp_path.split('/')[-1].split('.')[-1] == 'ctrl' # check if model trained under label correction
@@ -507,123 +507,141 @@ if __name__ == "__main__":
                 plt.colorbar()
                 plt.show()
         """
+        if args.test == 'traces':
+            # load normalization parameters
+            colsparam_dict = pickle.load(open(args.norm_param_path, 'rb'))
+            # load and normalize a trace input
+            traces = load_csv_traces(['Trial1', 'Trial2', 'Trial3', 'Trial4', 'Trial5', 'Trial6'], args.ds_path, norm_params=colsparam_dict)
+            classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
+            y_true = []
+            y_output = []
 
-        # load normalization parameters
-        colsparam_dict = pickle.load(open(args.norm_param_path, 'rb'))
-        # load and normalize a trace input
-        traces = load_csv_traces(['Trial1', 'Trial2', 'Trial3', 'Trial4', 'Trial5', 'Trial6'], args.ds_path, norm_params=colsparam_dict)
-        classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
-        y_true = []
-        y_output = []
+            for tix, dtrace in enumerate(traces):
+                print('------------ Trial', tix+1, '------------')
+                trial_y_true = []
+                trial_y_output = []
+                for k in dtrace.keys():
+                    num_correct = 0
+                    tr = dtrace[k].values
+                    #correct_class = classmap[k]
+                    output_list_kpi = []
+                    output_list_y = []
+                    for t in range(tr.shape[0]):
+                        if t + train_config['slice_len'] < tr.shape[0]:
+                            input_sample = tr[t:t + train_config['slice_len']]
+                            input = torch.Tensor(input_sample[np.newaxis, :, :])
+                            input = input.to(device)    # transfer input data to GPU
+                            pred = model(input)
+                            class_ix = pred.argmax(1)
+                            correct_class = classmap[k]
+                            if check_zeros:
+                                zeros = (input_sample == 0).astype(int).sum(axis=1)
+                                if (zeros > 10).all():
+                                    correct_class = 3 # control if all KPIs rows have > 10 zeros
+                            co = class_ix.cpu().numpy()[0]
+                            #if co == correct_class:
+                            #    num_correct += 1
+                            y_true.append(correct_class)
+                            y_output.append(co)
+                            trial_y_true.append(correct_class)
+                            trial_y_output.append(co)
+                            output_list_kpi.append(tr[t])
+                            output_list_y.append(co)
 
-        for tix, dtrace in enumerate(traces):
-            print('------------ Trial', tix+1, '------------')
-            trial_y_true = []
-            trial_y_output = []
-            for k in dtrace.keys():
-                num_correct = 0
-                tr = dtrace[k].values
-                #correct_class = classmap[k]
-                output_list_kpi = []
-                output_list_y = []
-                for t in range(tr.shape[0]):
-                    if t + train_config['slice_len'] < tr.shape[0]:
-                        input_sample = tr[t:t + train_config['slice_len']]
-                        input = torch.Tensor(input_sample[np.newaxis, :, :])
-                        input = input.to(device)    # transfer input data to GPU
-                        pred = model(input)
-                        class_ix = pred.argmax(1)
-                        correct_class = classmap[k]
-                        if check_zeros:
-                            zeros = (input_sample == 0).astype(int).sum(axis=1)
-                            if (zeros > 10).all():
-                                correct_class = 3 # control if all KPIs rows have > 10 zeros
-                        co = class_ix.cpu().numpy()[0]
-                        #if co == correct_class:
-                        #    num_correct += 1
-                        y_true.append(correct_class)
-                        y_output.append(co)
-                        trial_y_true.append(correct_class)
-                        trial_y_output.append(co)
-                        output_list_kpi.append(tr[t])
-                        output_list_y.append(co)
+                        #mean, stddev = timing_inference_GPU(input, model)
+                    #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
+                    assert (len(output_list_kpi) == len(output_list_y))
+                    plot_trace_class(output_list_kpi, output_list_y,
+                                    'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(
+                                        tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi), save_plain=True)
+                trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
 
-                    #mean, stddev = timing_inference_GPU(input, model)
-                #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
-                assert (len(output_list_kpi) == len(output_list_y))
-                plot_trace_class(output_list_kpi, output_list_y,
-                                 'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(
-                                     tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi), save_plain=True)
-            trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
+                for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
+                    sum_row = np.sum(trial_cm[r, :])
+                    if sum_row == 0:
+                        sum_row = 1
+                    trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
+                print('Confusion Matrix (%)')
+                print(trial_cm)
 
-            for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
-                sum_row = np.sum(trial_cm[r, :])
-                if sum_row == 0:
-                    sum_row = 1
-                trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
-            print('Confusion Matrix (%)')
-            print(trial_cm)
-
-        cm = conf_mat(y_true,y_output, labels=list(range(len(classmap.keys()))))
-        cm = cm.astype('float')
-        for r in range(cm.shape[0]):  # for each row in the confusion matrix
-            sum_row = np.sum(cm[r, :])
-            cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
+            cm = conf_mat(y_true,y_output, labels=list(range(len(classmap.keys()))))
+            cm = cm.astype('float')
+            for r in range(cm.shape[0]):  # for each row in the confusion matrix
+                sum_row = np.sum(cm[r, :])
+                cm[r, :] = cm[r, :] / sum_row  * 100.# compute in percentage
 
 
-        axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if cm.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
-        df_cm = pd.DataFrame(cm, axis_lbl, axis_lbl)
-        # plt.figure(figsize=(10,7))
-        sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16}, fmt='.1f')  # font size
-        plt.show()
-        name_suffix = '_ctrlcorrected' if check_zeros else ''
-        add_ctrl = '.ctrl' if ctrl_flag else ''
-        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}.pdf")
-        plt.clf()
-        print('-------------------------------------------')
-        print('-------------------------------------------')
-        print('Global confusion matrix (%) (all trials)')
-        print(cm)
+            axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if cm.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
+            df_cm = pd.DataFrame(cm, axis_lbl, axis_lbl)
+            # plt.figure(figsize=(10,7))
+            sn.set(font_scale=1.4)  # for label size
+            sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b_r", as_cmap=True), annot_kws={"size": 16}, fmt='.1f')  # font size
+            plt.show()
+            name_suffix = '_ctrlcorrected' if check_zeros else ''
+            add_ctrl = '.ctrl' if ctrl_flag else ''
+            plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}.pdf")
+            plt.clf()
+            print('-------------------------------------------')
+            print('-------------------------------------------')
+            print('Global confusion matrix (%) (all trials)')
+            print(cm)
 
-        #plt.figure(figsize=(30, 1))
-        #plt.imshow(tr[:1000, :].T)
-        #plt.show()
+            #plt.figure(figsize=(30, 1))
+            #plt.imshow(tr[:1000, :].T)
+            #plt.show()
+        else:
+            ###################### TESTING WITH VALIDATION DATA #########################
+            print(f'Test Analysis for model {train_config["model_postfix"]} with slice {ds_info["slice_len"]}:')
+            # Num. params
+            total_params = sum(p.numel() for p in model.parameters())
+            print(f'TOTAL params        {total_params}')
 
-        ###################### TESTING WITH VALIDATION DATA #########################
-        test_dataloader = DataLoader(ds_test, batch_size=train_config['batch_size'], shuffle=False)
+            test_dataloader = DataLoader(ds_test, batch_size=train_config['batch_size'], shuffle=False)
 
-        size = len(test_dataloader.dataset)
-        model.eval()
-        correct = 0
-        conf_matrix = np.zeros((train_config['Nclass'], train_config['Nclass']))
-        with torch.no_grad():
-            for X, y in test_dataloader:
-                X = X.to(device)
-                pred = model(X)
-                correct += (pred.cpu().argmax(1) == y).type(torch.float).sum().item()
-                conf_matrix += conf_mat(y, pred.cpu().argmax(1), labels=list(range(train_config['Nclass'])))
-        correct /= size
-        print(
-            f"Test Error for model {ds_info['slice_len']}.{train_config['model_postfix']}: \n "
-            f"Accuracy: {(100 * correct):>0.1f}%"
-        )
-        conf_matrix = conf_matrix.astype('float')
-        for r in range(conf_matrix.shape[0]):  # for each row in the confusion matrix
-            sum_row = np.sum(conf_matrix[r, :])
-            conf_matrix[r, :] = conf_matrix[r, :] / sum_row  * 100. # compute in percentage
-        df_cm = pd.DataFrame(conf_matrix, axis_lbl, axis_lbl)
-        # plt.figure(figsize=(10,7))
-        sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, annot_kws={"size": 16}, fmt='.1f')  # font size
-        plt.show()
-        name_suffix = '_ctrlcorrected' if args.ds_file.split('_')[-2] == 'ctrlcorrected' else ''
-        plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}_test.pdf")
-        plt.clf()
-        print('-------------------------------------------')
-        print('-------------------------------------------')
-        print('Global confusion matrix (%) (validation split)')
-        print(conf_matrix)
+            size = len(test_dataloader.dataset)
+            model.eval()
+            correct = 0
+            conf_matrix = np.zeros((train_config['Nclass'], train_config['Nclass']))
+            with torch.no_grad():
+                for X, y in test_dataloader:
+                    X = X.to(device)
+                    pred = model(X)
+                    correct += (pred.cpu().argmax(1) == y).type(torch.float).sum().item()
+                    conf_matrix += conf_mat(y, pred.cpu().argmax(1), labels=list(range(train_config['Nclass'])))
+            correct /= size
+            # Accuracy
+            print(
+                f"Test Error: \n "
+                f"Accuracy: {(100 * correct):>0.2f}%"
+            )
+            # Conf. Matrix
+            conf_matrix = conf_matrix.astype('float')
+            for r in range(conf_matrix.shape[0]):  # for each row in the confusion matrix
+                sum_row = np.sum(conf_matrix[r, :])
+                conf_matrix[r, :] = conf_matrix[r, :] / sum_row  * 100. # compute in percentage
+            axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if conf_matrix.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
+            df_cm = pd.DataFrame(conf_matrix, axis_lbl, axis_lbl)
+            # plt.figure(figsize=(10,7))
+            sn.set(font_scale=1.4)  # for label size
+            sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b_r", as_cmap=True), annot_kws={"size": 16}, fmt='.1f')  # font size
+            plt.show()
+            add_ctrl = '.ctrl' if ctrl_flag else ''
+            name_suffix = '_ctrlcorrected' if args.ds_file.split('_')[-2] == 'ctrlcorrected' else ''
+            plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}_test.pdf")
+            plt.clf()
+            print('-------------------------------------------')
+            print('Global confusion matrix (%) (validation split)')
+            print(conf_matrix)
+            # Inference time analysis
+            inputs, _ = next(iter(test_dataloader))  
+            sample_input = inputs[0]
+            print(sample_input.shape)
+            m, sd = timing_inference_GPU(sample_input, model)
+            print('-------------------------------------------')
+            print('Inference time analysis:')
+            print(f'Mean: {m}, Standard deviation: {sd}')
+
+
 
 
 
