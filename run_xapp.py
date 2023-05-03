@@ -123,6 +123,7 @@ def main():
 
             kpi_new = np.fromstring(data_sck, sep=',')
             if kpi_new.shape[0] < 31:
+                logging.info('Discarding KPI: too short ')
                 continue # discard incomplete KPIs
                         # [TODO] this is to address the multiple 'm' case, but not ideal like this
 
