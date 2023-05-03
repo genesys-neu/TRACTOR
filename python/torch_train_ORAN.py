@@ -217,11 +217,12 @@ def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
     else:
         size = len(dataloader.dataset)
     model.train()
+    start_time = time.time()
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction error
         pred = model(X)
         loss = loss_fn(pred, y)
-
+    
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
@@ -230,7 +231,8 @@ def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
         if batch % 100 == 0:
             loss, current = loss.item(), batch * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
-
+    print("--- %s seconds ---" % (time.time() - start_time))
+    return (time.time() - start_time)
 
 def validate_epoch(dataloader, model, loss_fn, Nclasses, isDebug=False):
     if not isDebug:
@@ -483,6 +485,7 @@ if __name__ == "__main__":
             torch.save(model.state_dict(), model_params_filename)
             model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
         model.to(device)
+        model.eval()
 
         """
         dataloader = DataLoader(ds_test, batch_size=128)
@@ -525,54 +528,54 @@ if __name__ == "__main__":
             classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
             y_true = []
             y_output = []
+            with torch.no_grad():
+                for tix, dtrace in enumerate(traces):
+                    print('------------ Trial', tix+1, '------------')
+                    trial_y_true = []
+                    trial_y_output = []
+                    for k in dtrace.keys():
+                        num_correct = 0
+                        tr = dtrace[k].values
+                        #correct_class = classmap[k]
+                        output_list_kpi = []
+                        output_list_y = []
+                        for t in range(tr.shape[0]):
+                            if t + train_config['slice_len'] < tr.shape[0]:
+                                input_sample = tr[t:t + train_config['slice_len']]
+                                input = torch.Tensor(input_sample[np.newaxis, :, :])
+                                input = input.to(device)    # transfer input data to GPU
+                                pred = model(input)
+                                class_ix = pred.argmax(1)
+                                correct_class = classmap[k]
+                                if check_zeros:
+                                    zeros = (input_sample == 0).astype(int).sum(axis=1)
+                                    if (zeros > 10).all():
+                                        correct_class = 3 # control if all KPIs rows have > 10 zeros
+                                co = class_ix.cpu().numpy()[0]
+                                #if co == correct_class:
+                                #    num_correct += 1
+                                y_true.append(correct_class)
+                                y_output.append(co)
+                                trial_y_true.append(correct_class)
+                                trial_y_output.append(co)
+                                output_list_kpi.append(tr[t])
+                                output_list_y.append(co)
 
-            for tix, dtrace in enumerate(traces):
-                print('------------ Trial', tix+1, '------------')
-                trial_y_true = []
-                trial_y_output = []
-                for k in dtrace.keys():
-                    num_correct = 0
-                    tr = dtrace[k].values
-                    #correct_class = classmap[k]
-                    output_list_kpi = []
-                    output_list_y = []
-                    for t in range(tr.shape[0]):
-                        if t + train_config['slice_len'] < tr.shape[0]:
-                            input_sample = tr[t:t + train_config['slice_len']]
-                            input = torch.Tensor(input_sample[np.newaxis, :, :])
-                            input = input.to(device)    # transfer input data to GPU
-                            pred = model(input)
-                            class_ix = pred.argmax(1)
-                            correct_class = classmap[k]
-                            if check_zeros:
-                                zeros = (input_sample == 0).astype(int).sum(axis=1)
-                                if (zeros > 10).all():
-                                    correct_class = 3 # control if all KPIs rows have > 10 zeros
-                            co = class_ix.cpu().numpy()[0]
-                            #if co == correct_class:
-                            #    num_correct += 1
-                            y_true.append(correct_class)
-                            y_output.append(co)
-                            trial_y_true.append(correct_class)
-                            trial_y_output.append(co)
-                            output_list_kpi.append(tr[t])
-                            output_list_y.append(co)
+                            #mean, stddev = timing_inference_GPU(input, model)
+                        #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
+                        assert (len(output_list_kpi) == len(output_list_y))
+                        plot_trace_class(output_list_kpi, output_list_y,
+                                        'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(
+                                            tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi), save_plain=True)
+                    trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
 
-                        #mean, stddev = timing_inference_GPU(input, model)
-                    #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
-                    assert (len(output_list_kpi) == len(output_list_y))
-                    plot_trace_class(output_list_kpi, output_list_y,
-                                    'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(
-                                        tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi), save_plain=True)
-                trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
-
-                for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
-                    sum_row = np.sum(trial_cm[r, :])
-                    if sum_row == 0:
-                        sum_row = 1
-                    trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
-                print('Confusion Matrix (%)')
-                print(trial_cm)
+                    for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix
+                        sum_row = np.sum(trial_cm[r, :])
+                        if sum_row == 0:
+                            sum_row = 1
+                        trial_cm[r, :] = trial_cm[r, :] / sum_row * 100.  # compute in percentage
+                    print('Confusion Matrix (%)')
+                    print(trial_cm)
 
             cm = conf_mat(y_true,y_output, labels=list(range(len(classmap.keys()))))
             cm = cm.astype('float')
