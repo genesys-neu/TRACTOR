@@ -455,11 +455,11 @@ if __name__ == "__main__":
             for r in range(conf_matrix.shape[0]):  # for each row in the confusion matrix
                 sum_row = np.sum(conf_matrix[r, :])
                 conf_matrix[r, :] = conf_matrix[r, :] / sum_row  * 100. # compute in percentage
-            axis_lbl = ['eMBB', 'mMTC', 'URLLC'] if conf_matrix.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLC', 'ctrl']
+            axis_lbl = ['eMBB', 'mMTC', 'URLLc'] if conf_matrix.shape[0] == 3 else ['eMBB', 'mMTC', 'URLLc', 'ctrl']
             df_cm = pd.DataFrame(conf_matrix, axis_lbl, axis_lbl)
             # plt.figure(figsize=(10,7))
-            sn.set(font_scale=1.4)  # for label size
-            sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b", as_cmap=True), annot_kws={"size": 16}, fmt='.1f')  # font size
+            sn.set(font_scale=1.8)  # for label size
+            sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b", as_cmap=True), annot_kws={"size": 25}, fmt='.1f')  # font size
             plt.show()
             add_ctrl = '.ctrl' if ctrl_flag else ''
             name_suffix = '_ctrlcorrected' if args.ds_file.split('_')[-2] == 'ctrlcorrected' else ''
