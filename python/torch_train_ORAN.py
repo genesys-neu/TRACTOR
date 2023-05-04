@@ -435,7 +435,6 @@ if __name__ == "__main__":
             test_dataloader = DataLoader(ds_test, batch_size=train_config['batch_size'], shuffle=False)
 
             size = len(test_dataloader.dataset)
-            model.eval()
             correct = 0
             conf_matrix = np.zeros((train_config['Nclass'], train_config['Nclass']))
             with torch.no_grad():
