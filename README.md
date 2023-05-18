@@ -54,3 +54,10 @@ Once the nodes have been initialized, you can connect to each of them and run th
   iperf3 -c 172.16.0.1 -p 5204 -t <num seconds>
   ```
   where `<num seconds>` is the number of seconds to run for the traffic generator.
+
+  
+## IPsec
+To enable IPsec
+```
+  start_ipsec.sh genesys-<gNB #node> genesys-<RIC #node>
+```
