@@ -26,7 +26,7 @@ sshpass -p "scope" ssh $1 "sed -i 's/ike=aes256ccm128/#ike=aes256ccm128/;s/esp=a
 sshpass -p "scope" ssh $1 "sed -i 's/#ike=aes256gcm128/ike=aes256gcm128/;s/#esp=aes256gcm128/esp=aes256gcm128/' /etc/ipsec.conf"
 sshpass -p "scope" ssh $2 "sed -i 's/#ike=aes256gcm128/ike=aes256gcm128/;s/#esp=aes256gcm128/esp=aes256gcm128/' /etc/ipsec.conf"
 
-#Allow the kernel to access ipsec by RICnning: 
+#Allow the kernel to access ipsec by Running: 
 sshpass -p "scope" ssh $1 "apparmor_parser -R /etc/apparmor.d/usr.lib.ipsec.stroke" 
 sshpass -p "scope" ssh $2 "apparmor_parser -R /etc/apparmor.d/usr.lib.ipsec.stroke" 
 
