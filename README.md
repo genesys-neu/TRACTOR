@@ -59,13 +59,6 @@ cd /home/sample-xapp/
 ```
 and wait until the app init is complete.
 
-### Generate traffic from UE to the gNB
-To generate _random_ traffic, on UE node run:
-```
-iperf3 -c 172.16.0.1 -p 5204 -t <num seconds>
-```
-where `<num seconds>` is the number of seconds to run for the traffic generator and `172.16.0.1` correspond to the IP of the gNB in Colosseum.
-
 ### Replay 5G traffic traces
 To re-play the traffic traces in `raw` (`.csv` format) directory on colosseum, after everything else is instantiated you can first run on gNB
 ```
@@ -76,6 +69,14 @@ and then on UE
 python traffic_gen.py -f <playback file name>
 ```
 to start the predefined packet communication between gNB and UE on Colosseum.
+
+
+### Generate random traffic from UE to the gNB
+To generate _random_ traffic, on UE node run:
+```
+iperf3 -c 172.16.0.1 -p 5204 -t <num seconds>
+```
+where `<num seconds>` is the number of seconds to run for the traffic generator and `172.16.0.1` corresponds to the IP of the gNB in Colosseum.
 
 ## IPsec
 To enable IPsec
