@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
-colormap = {0: 'y', 1: 'r', 2: 'g', 3: 'b'}
+colormap = {0: '#D97652', 1: '#56A662', 2: '#BF4E58', 3: '#8172B3'}
+hatchmap = {0: '/', 1: '\\', 2: '//', 3: '.' }
 
 
 import re
@@ -19,31 +20,61 @@ def natural_keys(text):
 import torch
 from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
 
-def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, colormap = {0: 'y', 1: 'r', 2: 'g', 3: 'b'}, save_plain_img=False, postfix=''):
+def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, save_plain_img=False, postfix='', colormap = {0: '#D97652', 1: '#56A662', 2: '#BF4E58', 3: '#8172B3'}, hatchmap = {0: '/', 1: '\\', 2: '//', 3: '.' }):
     imgout = np.array(output_list_kpi).T
     # Create figure and axes
     fig, ax = plt.subplots(figsize=(50, 5))
     # Display the image
-    ax.imshow(imgout, extent=[0, len(output_list_kpi), 0, imgout.shape[0]], aspect='auto', vmin=0., vmax=1.)
+    pos = ax.imshow(imgout, extent=[0, len(output_list_kpi), 0, imgout.shape[0]], aspect='auto', vmin=0., vmax=1.)
     if save_plain_img:
         os.makedirs(img_path + '/imgs', exist_ok=True)
+        #fig.colorbar(pos)
         plt.savefig(img_path + '/imgs/outputs_' + os.path.basename(img_path) + 's' + str(
             head - len(output_list_kpi)) + '_e' + str(
-            head) + '__plain.pdf')
+            head) + '__plain.png')
 
+    # add white background
+    ax.imshow(np.ones(imgout.shape), extent=[0, len(output_list_kpi), 0, imgout.shape[0]], cmap='bone', aspect='auto', vmin=0., vmax=1.)
+    plt.rcParams['hatch.linewidth'] = 2.0  # previous svg hatch linewidth
+    lbl_old = None
+    rect_len = 0
     for ix, label in enumerate(output_list_y):
         if isinstance(label, int) or isinstance(label, numpy.int64):
             lbl = label
         elif isinstance(label, torch.Tensor):
             lbl = label.numpy()[0]
         # Create a Rectangle patch
-        rect = patches.Rectangle((ix, 0), slice_len, imgout.shape[0] - 1, linewidth=1, edgecolor=colormap[lbl],
-                                 facecolor=colormap[lbl], alpha=0.15)
+        #print(lbl)
+        if lbl_old is None:
+            lbl_old = lbl
+            rect_len = 1
+            slicestart_ix = ix
+            continue
+        else:
+
+            if not(ix == (len(output_list_y)-1)) and lbl_old == lbl:  # if the same label has been assigned as before
+                rect_len += 1   # increase size of patch by 1
+                lbl_old = lbl   # update the prev class label
+                continue    # skip to next input sample without printing
+            else:
+                rect_len += slice_len - 1   # we set the remainder rectangle length based on the slice length
+                # proceed to printing the Rectangle up until the previous sample
+
+        #Here we plot the rectangle for up until the previous block
+        if hatchmap is None:
+            rect = patches.Rectangle((slicestart_ix, 0), rect_len, imgout.shape[0], linewidth=1, edgecolor=colormap[lbl_old], facecolor=colormap[lbl_old], alpha=1)
+        else:
+            rect = patches.Rectangle((slicestart_ix, 0), rect_len, imgout.shape[0], hatch=hatchmap[lbl_old], edgecolor='white', facecolor=colormap[lbl_old], linewidth=0)
         # Add the patch to the Axes
         ax.add_patch(rect)
+        # then we reset the info for the next block
+        lbl_old = lbl
+        rect_len = 1    # reset rectangle len
+        slicestart_ix = ix  # set the start for the next rectangle
+
     os.makedirs(img_path + '/imgs', exist_ok=True)
     plt.savefig(img_path + '/imgs/outputs_' + os.path.basename(img_path) + 's' + str(head - len(output_list_kpi)) + '_e' + str(
-        head) + postfix + '.pdf')
+        head) + postfix + '.png')
     plt.clf()
 
 if __name__ == "__main__":
@@ -157,8 +188,6 @@ if __name__ == "__main__":
 
     elif args.mode == 'inference':
 
-
-
         if 'cnn' in args.model:
             global_model = ConvNN
         else:
@@ -172,6 +201,7 @@ if __name__ == "__main__":
             model = global_model(classes=args.Nclasses, slice_len=args.slicelen, num_feats=kpis.shape[1])
             model.load_state_dict(torch.load(args.model, map_location='cuda:0')['model_state_dict'])
             model.to(device)
+            model.eval()
             output_list_y = []
             if 'embb' in os.path.basename(p):
                 correct_class = classmap['embb']
@@ -206,16 +236,26 @@ if __name__ == "__main__":
                     num_correct += 1 if (co == correct_class) else 0
                     num_samples += 1
 
-            mypost = '_slice' + str(args.slicelen)
+            mypost = '_cnn_' if isinstance(model, ConvNN) else '_trans_'
+            mypost += '_slice' + str(args.slicelen)
             mypost += '_chZero' if check_zeros else ''
-            plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost)
+            mypost += '_whitebg'
+            plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True, hatchmap=None)
+            mypost += '_hatch'
+            plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True)
             print("Correct classification for traffic type (%): ", (num_correct / num_samples)*100., "num correct =", num_correct, ", num classifications =", num_samples)
 
             if check_zeros:
                 unique, counts = np.unique(output_list_y, return_counts=True)
                 count_class = dict(zip(unique, counts))
+                print(count_class)
                 if 3 in count_class.keys():
-                    print("Percent of verified ctrl (through heuristic): ", (num_verified_ctrl / num_heuristic_ctrl)*100. )
+                    if num_heuristic_ctrl > 0:
+                        print("Percent of verified ctrl (through heuristic): ", (num_verified_ctrl / num_heuristic_ctrl)*100., "num verified =", num_verified_ctrl, ", num heuristic matches =", num_heuristic_ctrl )
+                    else:
+                        print("No ctrl captured by the heuristic")
+                else:
+                    print("No ctrl captured by the heuristc")
 
 
 
