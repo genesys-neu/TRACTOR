@@ -46,3 +46,5 @@ while IFS= read -r line; do
     	sleep 3
     fi
 done < $1
+
+wait
