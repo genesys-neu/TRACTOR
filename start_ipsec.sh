@@ -21,7 +21,7 @@ sshpass -p "scope" ssh $1 "sed -i 's/10.207.208.180/${IPeNB}/;s/10.207.208.18/${
 sshpass -p "scope" ssh $2 "sed -i 's/10.207.208.180/${IPeNB}/;s/10.207.208.18/${IPRIC}/' /etc/ipsec.conf"
 
 sshpass -p "scope" ssh $1 "sed -i 's/ike=aes256ccm128/#ike=aes256ccm128/;s/esp=aes256ccm128/#esp=aes256ccm128/' /etc/ipsec.conf"
-sshpass -p "scope" ssh $1 "sed -i 's/ike=aes256ccm128/#ike=aes256ccm128/;s/esp=aes256ccm128/#esp=aes256ccm128/' /etc/ipsec.conf"
+sshpass -p "scope" ssh $2 "sed -i 's/ike=aes256ccm128/#ike=aes256ccm128/;s/esp=aes256ccm128/#esp=aes256ccm128/' /etc/ipsec.conf"
 
 sshpass -p "scope" ssh $1 "sed -i 's/#ike=aes256gcm128/ike=aes256gcm128/;s/#esp=aes256gcm128/esp=aes256gcm128/' /etc/ipsec.conf"
 sshpass -p "scope" ssh $2 "sed -i 's/#ike=aes256gcm128/ike=aes256gcm128/;s/#esp=aes256gcm128/esp=aes256gcm128/' /etc/ipsec.conf"
