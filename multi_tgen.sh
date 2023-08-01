@@ -1,16 +1,18 @@
 #!/bin/bash
 ## HOW TO RUN: ./setup_tgen.sh config_file.txt
-## Ensure the gNB is the first SRN in config_fill.txt
+## Ensure the gNB is the first SRN in config_file.txt
 
 
 eNB_PORT=5305
 UE_PORT=5315
 ip=3
+out_file=output_$1
+num=1010123456002
 
 
 read -r gnb < $1
 echo "gnb is: $gnb"
-sshpass -p "scope" ssh $gnb 'colosseumcli rf start 1017 -c'
+sshpass -p "scope" ssh $gnb 'colosseumcli rf start 10042 -c'
 
 while IFS= read -r line; do
     echo "Configuring SRN: $line"
@@ -32,7 +34,7 @@ while IFS= read -r line; do
     	echo "Starting TGEN for SRN: $line"
     	trace=$(ls ./raw | shuf -n 1)
     	echo $trace
-    	echo "Using trace: $trace"
+    	echo "Using trace: $trace for $num" >> $out_file
     	echo "Using ip: 172.16.0.${ip}"
     	echo "Using eNB_PORT: $eNB_PORT and UE_PORT: $UE_PORT"
     	echo "Starting gNB"
@@ -43,8 +45,13 @@ while IFS= read -r line; do
     	ip=$((ip+1))
     	eNB_PORT=$((eNB_PORT+1))
     	UE_PORT=$((UE_PORT+1))
-    	sleep 3
+    	num=$((num+1))
+    	sleep 1
     fi
 done < $1
 
-wait
+#wait
+sleep 1800
+sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./
+
+echo "All tests complete"
