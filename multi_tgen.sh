@@ -1,16 +1,22 @@
 #!/bin/bash
 ## HOW TO RUN: ./setup_tgen.sh config_file.txt
-## Ensure the gNB is the first SRN in config_fill.txt
+## Ensure the gNB is the first SRN in config_file.txt
 
 
 eNB_PORT=5305
 UE_PORT=5315
 ip=3
+out_file=output_$1
+out_dir=${1%.*}
+num=1010123456002
 
+echo "using $1, results will be saved in ./$out_dir"
+sleep 2
+mkdir $out_dir
 
 read -r gnb < $1
 echo "gnb is: $gnb"
-sshpass -p "scope" ssh $gnb 'colosseumcli rf start 1017 -c'
+sshpass -p "scope" ssh $gnb 'colosseumcli rf start 10042 -c'
 
 while IFS= read -r line; do
     echo "Configuring SRN: $line"
@@ -30,21 +36,29 @@ while IFS= read -r line; do
     if [ $line != $gnb ]
     then
     	echo "Starting TGEN for SRN: $line"
-    	trace=$(ls ./raw | shuf -n 1)
+    	trace=$(ls ./raw/*.csv | shuf -n 1)
     	echo $trace
-    	echo "Using trace: $trace"
+    	echo "Using trace: $trace for $num" >> ./$out_dir/$out_file
     	echo "Using ip: 172.16.0.${ip}"
     	echo "Using eNB_PORT: $eNB_PORT and UE_PORT: $UE_PORT"
     	echo "Starting gNB"
-    	sshpass -p "scope" ssh $gnb "cd traffic_gen && python traffic_gen.py --eNB -f ./raw/${trace} --ip 172.16.0.${ip} -eNBp ${eNB_PORT} -UEp ${UE_PORT}" &
+    	sshpass -p "scope" ssh $gnb "cd traffic_gen && python traffic_gen.py --eNB -f ${trace} --ip 172.16.0.${ip} -eNBp ${eNB_PORT} -UEp ${UE_PORT}" &
     	sleep 3
     	echo "Starting UE"
-    	sshpass -p "scope" ssh $line "cd traffic_gen && python traffic_gen.py -f ./raw/${trace} -eNBp ${eNB_PORT} -UEp ${UE_PORT}" &
+    	sshpass -p "scope" ssh $line "cd traffic_gen && python traffic_gen.py -f ${trace} -eNBp ${eNB_PORT} -UEp ${UE_PORT}" &
     	ip=$((ip+1))
     	eNB_PORT=$((eNB_PORT+1))
     	UE_PORT=$((UE_PORT+1))
-    	sleep 3
+    	num=$((num+1))
+    	sleep 1
     fi
 done < $1
 
-wait
+#wait
+sleep 1800
+
+sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./$out_dir/
+
+echo "All tests complete"
+kill $(jobs -p)
+
