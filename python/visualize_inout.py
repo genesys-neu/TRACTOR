@@ -97,7 +97,6 @@ if __name__ == "__main__":
 
     if args.mode == 'pre-comp':
         slice_len = args.slicelen
-        num_correct = 0
         output_list_kpi = []
         output_list_y = []
         head = 0

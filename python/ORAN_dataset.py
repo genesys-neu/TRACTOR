@@ -9,34 +9,40 @@ from tqdm import tqdm
 import pickle
 import argparse
 from glob import glob
+import sys
 
-def load_csv_traces(trials, data_path, norm_params=None):
+def load_csv_traces(trials, data_path, data_type="clean", norm_params=None):
     mode = 'emuc'
     isControlClass = True if 'c' in mode else False
     trials_traces = []
     for trial in trials:
         print('Generating dataset ', trial)
-        ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset(data_path, isControlClass, trial)
+        if data_type == "clean":
+            ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset__clean(data_path, isControlClass, trial)
 
-        # stack together all data from all traffic class
-        if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
-            datasets = [embb_data, mmtc_data, urll_data, ctrl_data]
-        else:
-            datasets = [embb_data, mmtc_data, urll_data]
+            # stack together all data from all traffic class
+            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+                datasets = [embb_data, mmtc_data, urll_data, ctrl_data]
+            else:
+                datasets = [embb_data, mmtc_data, urll_data]
 
-        for ix, ds in enumerate(datasets):
-            # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
-            columns_drop = ['Timestamp', 'tx_errors downlink (%)']  # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
-            ds.drop(columns_drop, axis=1, inplace=True)
-            # normalize values
-            for ix, c in enumerate(ds.columns):
-                #print('Normalizing Col.', c, '-- Max', norm_params[ix]['max'], ', Min', norm_params[ix]['min'])
-                ds[c] = ds[c].map(lambda x: (x - norm_params[ix]['min']) / (norm_params[ix]['max'] - norm_params[ix]['min']))
+            for ix, ds in enumerate(datasets):
+                # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
+                columns_drop = ['Timestamp', 'tx_errors downlink (%)']  # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
+                ds.drop(columns_drop, axis=1, inplace=True)
+                # normalize values
+                for ix, c in enumerate(ds.columns):
+                    #print('Normalizing Col.', c, '-- Max', norm_params[ix]['max'], ', Min', norm_params[ix]['min'])
+                    ds[c] = ds[c].map(lambda x: (x - norm_params[ix]['min']) / (norm_params[ix]['max'] - norm_params[ix]['min']))
 
-        if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
-            trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data, 'ctrl': ctrl_data})
-        else:
-            trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data})
+            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+                trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data, 'ctrl': ctrl_data})
+            else:
+                trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data})
+
+        elif data_type == "multi":
+            ds_tree = load_csv_dataset__multi(data_path, isControlClass, trial)
+            #TODO
 
     return trials_traces
 
@@ -53,77 +59,122 @@ def check_slices(data, index, check_zeros=False):
         
 
 
-def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc', check_zeros=False):
+def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc', data_type="clean", check_zeros=False):
 
     isControlClass = True if 'c' in mode else False
+    allowed_types = ["clean", "raw", "multi"]
+    allowed_modes = ["emuc", "emu", "oc"]
+    assert (data_type in allowed_types), "[gen_slice_dataset] ERROR: data_type must be chosen from:"+str(allowed_types)
+    assert (mode in allowed_modes), "[gen_slice_dataset] ERROR: class configuration \""+str(mode)+"\" is not supported. Aborting."
+
     trials_in = []
     trials_lbl = []
     for trial in trials:
         print('Generating dataset ', trial)
-        ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset(data_path, isControlClass, trial)
+        if data_type == "clean":
+            ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset__clean(data_path, isControlClass, trial)
 
-        # stack together all data from all traffic class
-        if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
-            datasets = [embb_data, mmtc_data, urll_data, ctrl_data]
-        else:
-            datasets = [embb_data, mmtc_data, urll_data]
-
-        for ix, ds in enumerate(datasets):
-            new_ds = []
-            # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
-            columns_drop = ['Timestamp', 'tx_errors downlink (%)'] # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
-            ds.drop(columns_drop, axis=1, inplace=True)
-            for i in tqdm(range(ds.shape[0]), desc='Slicing..'):
-                if i + slice_len < ds.shape[0]:
-                    new_ds.append(
-                        ds[i:i + slice_len]  # slice
-                    )
-            new_ds = np.array(new_ds)
-
-            print("Generating ORAN traffic KPI dataset")
-            # create labels based on dataset generation mode
-            if mode == 'emu' or mode == 'emuc':
-
-                if ix == 0:
-                    print("\teMBB class")
-                    embb_data = new_ds
-                    embb_labels = check_slices(embb_data, ix, check_zeros) # labels are numbers (i.e. no 1 hot encoded)
-                elif ix == 1:
-                    print("\tMMTc class")
-                    mmtc_data = new_ds
-                    mmtc_labels = check_slices(mmtc_data, ix, check_zeros)
-                elif ix == 2:
-                    print("\tURLLc class")
-                    urll_data = new_ds
-                    urll_labels = check_slices(urll_data, ix, check_zeros)
-                elif ix == 3:
-                    print("\tControl / CTRL class")
-                    ctrl_data = new_ds
-                    ctrl_labels = np.ones((ctrl_data.shape[0],), dtype=np.int32)*ix
+            # stack together all data from all traffic class
+            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+                datasets = [embb_data, mmtc_data, urll_data, ctrl_data]
             else:
-                if ix < 3:
-                    print("Active traffic class")
+                datasets = [embb_data, mmtc_data, urll_data]
+
+            for ix, ds in enumerate(datasets):
+                new_ds = []
+                # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
+                columns_drop = ['Timestamp', 'tx_errors downlink (%)'] # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
+                ds.drop(columns_drop, axis=1, inplace=True)
+                new_ds = slice_dataset(ds, slice_len)
+
+                print("Generating ORAN traffic KPI dataset")
+                # create labels based on dataset generation mode
+                if mode == 'emu' or mode == 'emuc':
+                    # 4 traffic classes problem
                     if ix == 0:
+                        print("\teMBB class")
                         embb_data = new_ds
-                        embb_labels = np.zeros((embb_data.shape[0],), dtype=np.int32) # labels are numbers (i.e. no 1 hot encoded)
+                        embb_labels = check_slices(embb_data, ix, check_zeros) # labels are numbers (i.e. no 1 hot encoded)
                     elif ix == 1:
+                        print("\tMMTc class")
                         mmtc_data = new_ds
-                        mmtc_labels = np.zeros((mmtc_data.shape[0],), dtype=np.int32)
+                        mmtc_labels = check_slices(mmtc_data, ix, check_zeros)
                     elif ix == 2:
+                        print("\tURLLc class")
                         urll_data = new_ds
-                        urll_labels = np.zeros((urll_data.shape[0],), dtype=np.int32)
+                        urll_labels = check_slices(urll_data, ix, check_zeros)
+                    elif ix == 3:
+                        print("\tControl / CTRL class")
+                        ctrl_data = new_ds
+                        ctrl_labels = np.ones((ctrl_data.shape[0],), dtype=np.int32)*ix
+                elif mode == 'co':
+                    # binary traffic labeling (i.e. yes/no active traffic
+                    if ix != 3:
+                        print("Active traffic class")
+                        if ix == 0:
+                            embb_data = new_ds
+                            embb_labels = np.zeros((embb_data.shape[0],), dtype=np.int32) # labels are numbers (i.e. no 1 hot encoded)
+                        elif ix == 1:
+                            mmtc_data = new_ds
+                            mmtc_labels = np.zeros((mmtc_data.shape[0],), dtype=np.int32)
+                        elif ix == 2:
+                            urll_data = new_ds
+                            urll_labels = np.zeros((urll_data.shape[0],), dtype=np.int32)
+                    else:
+                        print("\tControl / CTRL class")
+                        ctrl_data = new_ds
+                        ctrl_labels = np.ones((ctrl_data.shape[0],), dtype=np.int32)
                 else:
-                    print("\tControl / CTRL class")
-                    ctrl_data = new_ds
-                    ctrl_labels = np.ones((ctrl_data.shape[0],), dtype=np.int32)
+                    print("[gen_slice_dataset] ERROR: class configuration \"", mode, "\" is not supported. Aborting.")
+                    sys.exit(1)
 
-        if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
-            all_input = np.concatenate((embb_data, mmtc_data, urll_data, ctrl_data), axis=0)
-            all_labels = np.concatenate((embb_labels, mmtc_labels, urll_labels, ctrl_labels), axis=0)
-        else:
-            all_input = np.concatenate((embb_data, mmtc_data, urll_data), axis=0)
-            all_labels = np.concatenate((embb_labels, mmtc_labels, urll_labels), axis=0)
+            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+                all_input = np.concatenate((embb_data, mmtc_data, urll_data, ctrl_data), axis=0)
+                all_labels = np.concatenate((embb_labels, mmtc_labels, urll_labels, ctrl_labels), axis=0)
+            else:
+                all_input = np.concatenate((embb_data, mmtc_data, urll_data), axis=0)
+                all_labels = np.concatenate((embb_labels, mmtc_labels, urll_labels), axis=0)
 
+        elif data_type == "multi":
+            all_input = None
+            all_labels = None
+            ds_tree = load_csv_dataset__multi(data_path, isControlClass, trial)
+
+            for multi_conf in ds_tree.keys():
+                for u in ds_tree[multi_conf].keys():
+                    # process each user trace individually
+                    ds = ds_tree[multi_conf][u]['kpis']
+                    # slicing
+                    columns_drop = []   # TODO determine what columns to drop
+                    if len(columns_drop) > 0:
+                        ds.drop(columns_drop, axis=1, inplace=True)
+                    new_ds = slice_dataset(ds, slice_len)
+
+                    lbl = ds_tree[multi_conf][u]["label"]
+                    if lbl == "embb":
+                        class_ix = 0
+                        labels = check_slices(new_ds, class_ix, check_zeros)
+                    elif lbl == "mmtc":
+                        class_ix = 1
+                        labels = check_slices(new_ds, class_ix, check_zeros)
+                    elif lbl == "urllc":
+                        class_ix = 2
+                        labels = check_slices(new_ds, class_ix, check_zeros)
+                    elif lbl == "ctrl":
+                        class_ix = 4
+                        labels = np.ones((new_ds.shape[0],), dtype=np.int32) * class_ix
+
+                    if all_input is None:
+                        all_input = np.array(new_ds)
+                    else:
+                        all_input = np.concatenate((all_input, new_ds), axis=0)
+
+                    if all_labels is None:
+                        all_labels = labels
+                    else:
+                        all_labels = np.concatenate((all_labels, labels))
+
+        # TODO --> elif data_type == "raw":
 
         trials_in.append(all_input)
         trials_lbl.append(all_labels)
@@ -142,9 +193,6 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
         trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
         # store max/min values for later normalization
         columns_maxmin[c] = {'max': col_max, 'min': col_min}
-
-
-
 
     # generate (shuffled) train and test data
     samp_ixs = list(range(trials_in.shape[0]))
@@ -189,7 +237,18 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
     return trials_ds, columns_maxmin
 
 
-def load_csv_dataset(data_path, isControlClass, trial):
+def slice_dataset(ds, slice_len):
+    new_ds = []
+    for i in tqdm(range(ds.shape[0]), desc='Slicing..'):
+        if i + slice_len < ds.shape[0]:
+            new_ds.append(
+                ds[i:i + slice_len]  # slice
+            )
+    new_ds = np.array(new_ds)
+    return new_ds
+
+
+def load_csv_dataset__clean(data_path, isControlClass, trial):
     # for each traffic type, let's load csv info using pandas
     embb_files = glob(os.path.join(data_path, os.path.join(trial, "embb_*clean.csv")))
     embb_data = pd.concat([pd.read_csv(f, sep=",") for f in embb_files])
@@ -206,10 +265,42 @@ def load_csv_dataset(data_path, isControlClass, trial):
         mmtc_data = mmtc_data.drop(['ul_rssi'], axis=1)
     return ctrl_data, embb_data, mmtc_data, urll_data
 
+def load_csv_dataset__multi(data_path, isControlClass, trial):
+    ds_tree = {}
+    # find all multi-ue configurations
+    trial_path = os.path.join(data_path, trial)
+    multiUE_list = glob(os.path.join(trial_path, 'multi*'))
+    for m in multiUE_list:
+        multi_key = os.path.basename(m)
+        label_file = glob(os.path.join(m, '*.txt'))
+        assert(len(label_file) == 1)
+        # obtain the labels for each user
+        ds_tree[multi_key] = {}
+        with open(label_file[0], 'r') as f:
+            for line in f:
+                split_line = line.split()
+                trace_filename = split_line[2]
+                ueID = split_line[4]
+                label = ''
+                if "mmtc" in trace_filename.lower():
+                    label = "mmtc"
+                elif ("urll" in trace_filename.lower()) or ("urllc" in trace_filename.lower()):
+                    label = "urllc"
+                elif "embb" in trace_filename.lower():
+                    label = "embb"
+                assert(label != '')
+
+                ue_csv = os.path.join(m, ueID+"_metrics.csv")
+                ue_kpis = pd.read_csv(ue_csv, sep=",")
+                ue_kpis = ue_kpis.dropna(how='all', axis='columns')  # remove empty columns
+                ds_tree[multi_key][str(ueID)] = {"trace": trace_filename, "label": label, "kpis": ue_kpis }
+
+    return ds_tree
+
+
 
 class ORANTracesDataset(Dataset):
-    def __init__(self, dataset_pkl, key, normalize=True, path='/home/mauro/Research/ORAN/traffic_gen2/logs/', transform=None, target_transform=None):
-
+    def __init__(self, dataset_pkl, key, normalize=True, path='/home/mauro/Research/ORAN/TRACTOR/logs/', transform=None, target_transform=None):
         dataset = pickle.load(open(os.path.join(path, dataset_pkl), 'rb'))
         if normalize:
             norm_key = 'norm'
@@ -257,11 +348,12 @@ if __name__ == "__main__":
                              '1) "emu" means all classes except CTRL; '
                              '2) "emuc" include CTRL class; '
                              '3) "co" is specific to CTRL traffic and will generate a separate class for every other type of traffic.')
+    parser.add_argument("--data_type", default="clean", choices=["clean", "raw", "multi"], help="This argument specifies the type of KPI traces to load.")
     args, _ = parser.parse_known_args()
 
     path = args.ds_path
     trials = args.trials
-    dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path, mode=args.mode, check_zeros=args.check_zeros)
+    dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path, mode=args.mode, data_type=args.data_type, check_zeros=args.check_zeros)
 
     file_suffix = ''
     for t in trials:
@@ -275,7 +367,7 @@ if __name__ == "__main__":
     pickle.dump(dataset, open(os.path.join(path, 'dataset__' + args.mode + '__' +file_suffix + zeros_suffix + '.pkl'), 'wb'))
 
     # save separately maxmin normalization parameters for each column/feature
-    norm_param_path = os.path.join(path,'cols_maxmin.pkl')
+    norm_param_path = os.path.join(path,'cols_maxmin__'+file_suffix+'.pkl')
     yes_choice = ['yes', 'y']
     save_norm_param = True
     if os.path.isfile(norm_param_path):
