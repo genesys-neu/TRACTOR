@@ -10,6 +10,7 @@ import pickle
 import argparse
 from glob import glob
 import sys
+from visualize_inout import classmap
 
 def load_csv_traces(trials, data_path, data_type="clean", norm_params=None):
     mode = 'emuc'
@@ -18,7 +19,7 @@ def load_csv_traces(trials, data_path, data_type="clean", norm_params=None):
     for trial in trials:
         print('Generating dataset ', trial)
         if data_type == "clean":
-            ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset__clean(data_path, isControlClass, trial)
+            ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset__clean(data_path, trial, isControlClass)
 
             # stack together all data from all traffic class
             if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
@@ -41,7 +42,7 @@ def load_csv_traces(trials, data_path, data_type="clean", norm_params=None):
                 trials_traces.append({'embb': embb_data, 'mmtc': mmtc_data, 'urll': urll_data})
 
         elif data_type == "multi":
-            ds_tree = load_csv_dataset__multi(data_path, isControlClass, trial)
+            ds_tree = load_csv_dataset__multi(data_path, trial, isControlClass)
             #TODO
 
     return trials_traces
@@ -72,7 +73,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
     for trial in trials:
         print('Generating dataset ', trial)
         if data_type == "clean":
-            ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset__clean(data_path, isControlClass, trial)
+            ctrl_data, embb_data, mmtc_data, urll_data = load_csv_dataset__clean(data_path, trial, isControlClass)
 
             # stack together all data from all traffic class
             if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
@@ -81,7 +82,6 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
                 datasets = [embb_data, mmtc_data, urll_data]
 
             for ix, ds in enumerate(datasets):
-                new_ds = []
                 # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
                 columns_drop = ['Timestamp', 'tx_errors downlink (%)'] # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
                 ds.drop(columns_drop, axis=1, inplace=True)
@@ -138,7 +138,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
         elif data_type == "multi":
             all_input = None
             all_labels = None
-            ds_tree = load_csv_dataset__multi(data_path, isControlClass, trial)
+            ds_tree = load_csv_dataset__multi(data_path, trial, isControlClass)
 
             for multi_conf in ds_tree.keys():
                 for u in ds_tree[multi_conf].keys():
@@ -151,14 +151,8 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
                     new_ds = slice_dataset(ds, slice_len)
 
                     lbl = ds_tree[multi_conf][u]["label"]
-                    if lbl == "embb":
-                        class_ix = 0
-                        labels = check_slices(new_ds, class_ix, check_zeros)
-                    elif lbl == "mmtc":
-                        class_ix = 1
-                        labels = check_slices(new_ds, class_ix, check_zeros)
-                    elif lbl == "urllc":
-                        class_ix = 2
+                    if lbl == "embb" or lbl == "mmtc" or lbl == "urll":
+                        class_ix = classmap[lbl]
                         labels = check_slices(new_ds, class_ix, check_zeros)
                     elif lbl == "ctrl":
                         class_ix = 4
@@ -248,7 +242,7 @@ def slice_dataset(ds, slice_len):
     return new_ds
 
 
-def load_csv_dataset__clean(data_path, isControlClass, trial):
+def load_csv_dataset__clean(data_path, trial, isControlClass=True):
     # for each traffic type, let's load csv info using pandas
     embb_files = glob(os.path.join(data_path, os.path.join(trial, "embb_*clean.csv")))
     embb_data = pd.concat([pd.read_csv(f, sep=",") for f in embb_files])
@@ -265,7 +259,7 @@ def load_csv_dataset__clean(data_path, isControlClass, trial):
         mmtc_data = mmtc_data.drop(['ul_rssi'], axis=1)
     return ctrl_data, embb_data, mmtc_data, urll_data
 
-def load_csv_dataset__multi(data_path, isControlClass, trial):
+def load_csv_dataset__multi(data_path, trial, isControlClass=False):
     ds_tree = {}
     # find all multi-ue configurations
     trial_path = os.path.join(data_path, trial)
@@ -285,7 +279,7 @@ def load_csv_dataset__multi(data_path, isControlClass, trial):
                 if "mmtc" in trace_filename.lower():
                     label = "mmtc"
                 elif ("urll" in trace_filename.lower()) or ("urllc" in trace_filename.lower()):
-                    label = "urllc"
+                    label = "urll"
                 elif "embb" in trace_filename.lower():
                     label = "embb"
                 assert(label != '')
@@ -341,7 +335,7 @@ if __name__ == "__main__":
     parser.add_argument("--trials", required=True, default=['Trial1', 'Trial2', 'Trial3'], nargs='+', help="Trials in the data folder eg. \"Trail1 Trail2 Trail3\"")
     parser.add_argument("--filemarker", default='', help="Suffix added to the file as marker")
     parser.add_argument("--slicelen", default=4, type=int, help="Specify the slices lengths while generating the dataset.")
-    parser.add_argument("--ds_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/", help="Specify path where dataset files are stored")
+    parser.add_argument("--ds_path", default="/home/mauro/Research/ORAN/repo/TRACTOR/logs/", help="Specify path where dataset files are stored")
     parser.add_argument("--check_zeros", action="store_true", default=False, help="Assign ctrl label to slices which all their rows contain >10 zeros")
     parser.add_argument("--mode", default='emuc', choices=['emu', 'emuc', 'co'],
                         help='This argument specifies which class to use when generating the dataset: '
