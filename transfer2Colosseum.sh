@@ -4,18 +4,10 @@
 # 3 - RIC machine id
 
 #!/bin/bash
-#sshpass -p "ChangeMe" ssh $3 'mkdir /root/logs'
-#sshpass -p "ChangeMe" scp logs/cols_maxmin.pkl $3:/root/logs/.
-#sshpass -p "ChangeMe" scp ../../TRACTOR2/logs/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice8_wCQI.pkl $3:/root/logs/.
-#sshpass -p "ChangeMe" ssh $3 'mkdir /root/model'
-#sshpass -p "ChangeMe" scp model/model_weights__slice8.pt $3:/root/model/.
 
 sshpass -p "ChangeMe" rsync -av -e ssh --exclude='colosseum' ../TRACTOR $3:/root/.
 sshpass -p "scope" rsync -av -e ssh --exclude='colosseum' ../TRACTOR $1:/root/.
 sshpass -p "scope" rsync -av -e ssh --exclude='colosseum' ../TRACTOR $2:/root/.
-#sshpass -p "ChangeMe" scp -r ../TRACTOR $3:/root/.
-#sshpass -p "scope"  scp -r ../TRACTOR $1:/root/.
-#sshpass -p "scope" scp -r ../TRACTOR $2:/root/.
 
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/TRACTOR sample-xapp-24:/home/sample-xapp/.'
 sshpass -p "ChangeMe" ssh $3 'docker exec sample-xapp-24 mv /home/sample-xapp/TRACTOR/run_xapp.sh /home/sample-xapp/. && docker exec sample-xapp-24 chmod +x /home/sample-xapp/run_xapp.sh'
