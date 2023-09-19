@@ -10,7 +10,6 @@ import pickle
 import argparse
 from glob import glob
 import sys
-from visualize_inout import classmap
 
 def load_csv_traces(trials, data_path, data_type="clean", norm_params=None):
     mode = 'emuc'
@@ -344,6 +343,8 @@ if __name__ == "__main__":
                              '3) "co" is specific to CTRL traffic and will generate a separate class for every other type of traffic.')
     parser.add_argument("--data_type", default="clean", choices=["clean", "raw", "multi"], help="This argument specifies the type of KPI traces to load.")
     args, _ = parser.parse_known_args()
+
+    from visualize_inout import classmap
 
     path = args.ds_path
     trials = args.trials
