@@ -18,6 +18,7 @@ sshpass -p "scope" scp colosseum/source_code/colosseum-scope-e2/src/du_app/csv_r
 sshpass -p "scope" scp colosseum/source_code/colosseum-scope-e2/src/du_app/readLastMetrics.* $1:/root/radio_code/colosseum-scope-e2/src/du_app/.
 sshpass -p "scope" scp colosseum/source_code/colosseum-scope-e2/src/du_app/bs_connector.* $1:/root/radio_code/colosseum-scope-e2/src/du_app/.
 sshpass -p "scope" scp colosseum/source_code/colosseum-scope-e2/build/odu/makefile $1:/root/radio_code/colosseum-scope-e2/build/odu/.
+sshpass -p "scope" scp colosseum/source_code/colosseum-scope-e2/run_odu.sh $1:/root/radio_code/colosseum-scope-e2/run_odu.sh
 sshpass -p "scope" ssh $1 "cd /root/radio_code/colosseum-scope-e2/src/du_app/ && g++ readLastMetrics.cpp -o readLastMetrics.o"
 sshpass -p "scope" ssh $1 "cd /root/radio_code/colosseum-scope-e2/ && sed -i 's/172.30.199.202/${IPCOL0}/' build_odu.sh && ./build_odu.sh clean" # && ./run_odu.sh
 
