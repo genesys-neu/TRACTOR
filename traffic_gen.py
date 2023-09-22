@@ -74,6 +74,7 @@ with open(file_name, 'r') as csvfile:
         if row2[3] != '172.30.1.1':
             print('[UE] eNB starts, send start message')
             send_sock.sendto(str.encode('Start'), (Distant_IP, distant_port))
+            send_sock.sendto(str.encode('Start'), (Distant_IP, distant_port))
             # we also need to wait and listen for the first message
             while True:
                 data, address = rec_sock.recvfrom(4096)
@@ -101,13 +102,13 @@ with open(file_name, 'r') as csvfile:
                     continue
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
-            else:
+            #else:
                 # we should listen until we get data, or it is our turn to send again
                 #print('[UE] listening')
-                while time.time() - start_time < float(row[2]):
-                    data, address = rec_sock.recvfrom(4096)
-                    if data:
-                        break
+                #while time.time() - start_time < float(row[2]):
+                    #data, address = rec_sock.recvfrom(4096)
+                    #if data:
+                        #break
 
     else:  # if we are the eNB, we need to wait for a message from the UE before moving on
         print("[gNB] waiting for UE")
@@ -130,12 +131,12 @@ with open(file_name, 'r') as csvfile:
                     continue
                 send_sock.sendto(Sdata, (Distant_IP, distant_port))
 
-            else:
+            #else:
                 #print('[gNB] listening')
                 # we should listen until we get data, or it is our turn to send again
-                while time.time() - start_time < float(row[2]):
-                    data, address = rec_sock.recvfrom(4096)
-                    if data:
-                        break
+                #while time.time() - start_time < float(row[2]):
+                    #data, address = rec_sock.recvfrom(4096)
+                    #if data:
+                        #break
 
 print('Test complete!')

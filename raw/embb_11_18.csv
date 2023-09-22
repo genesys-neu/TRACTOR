@@ -1,5 +1,4 @@
 App name,No.,Time,Source,Destination,Protocol,Length,Info
-Netflix,2,0.257457,172.30.1.1,172.30.1.250,DNS,120,Standard query 0x7848 A android.prod.ftl.netflix.com
 Netflix,3,0.29977,172.30.1.250,172.30.1.1,DNS,360,Standard query response 0x7848 A android.prod.ftl.netflix.com CNAME mobile-ixanycast.ftl.netflix.com CNAME mobile.prod.dradis.netflix.com CNAME mobile.prod.us-east-1.internal.dradis.netflix.com CNAME apiproxy-device-prod-nlb-1-c582e7914e487bf4.elb.us-east-1.amazonaws.com A 18.209.154.243 A 35.171.10.11 A 52.73.71.11
 Netflix,4,0.305856,172.30.1.1,172.30.1.250,TCP,108,45434  >  443 [SYN] Seq=0 Win=65535 Len=0 MSS=9960 SACK_PERM TSval=1634239758 TSecr=0 WS=512
 Netflix,5,0.349023,172.30.1.250,172.30.1.1,TCP,96,"443  >  45434 [SYN, ACK] Seq=0 Ack=1 Win=4096 Len=0 MSS=9960 WS=512"

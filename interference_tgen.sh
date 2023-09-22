@@ -9,7 +9,7 @@ if [ ! -d "./interference" ]
     mkdir ./interference/on
 fi
 
-sshpass -p "scope" ssh $1 'colosseumcli rf start 1017 -c'
+sshpass -p "scope" ssh $1 "colosseumcli rf start 1017 -c"
 
 sshpass -p "scope" scp radio_tgen.conf $1:/root/radio_api/
 sshpass -p "scope" scp radio_tgen.conf $2:/root/radio_api/
@@ -22,17 +22,17 @@ sshpass -p "scope" rsync -av ./raw $1:/root/traffic_gen/
 sshpass -p "scope" ssh $2 "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
 sshpass -p "scope" rsync -av ./raw $2:/root/traffic_gen/
 
-if [ $# -eq 3 ] 
+  if [ $# -eq 3 ] 
   then
     sshpass -p "sunflower" scp uhd_tx_tone.sh $3:/root/utils/
-    sshpass -p "sunflower" ssh $3 "cd /root/utils && sh uhd_tx_tone.sh" &
     mkdir ./interference/on/${3}
-fi
+  fi
 
-sleep 5
+
+sleep 20
 clear -x
 echo "Configured all SRNs"
-sleep 5
+sleep 10
 
 for t in ./raw/*.csv
 do
@@ -45,8 +45,18 @@ do
   echo "***** Run traffic on UE *****"
   sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen.py -f ${t}" &
   UE_PID=$!
+  sleep 2 # let the traffic start
+  
+  if [ $# -eq 3 ] 
+  then
+    sshpass -p "sunflower" ssh $3 "cd /root/utils && sh uhd_tx_tone.sh" &
+    int_PID=$(sshpass -p "sunflower" ssh $3 "pgrep tx_wavefroms")
+  fi
+  
+  
   wait $gNB_PID # this will wait until gNB processes terminates
   wait $UE_PID # this will wait until gNB processes terminates
+  sshpass -p "sunflower" ssh $3 "kill -INT ${int_pid}"
 
   echo "***** Sleeping... *****"
   sleep 5 # sleep for a few second to allow all the classifier outputs to complete producing files
@@ -62,8 +72,9 @@ do
   fi
   sshpass -p "scope" ssh $1 "rm /root/radio_code/scope_config/metrics/csv/101*_metrics.csv"
   
-  echo "***** Preparing for next run *****"
+  echo "***** Completed $t Preparing for next run *****"
   sleep 5 # sleep for a few second to allow the system to settle
+  clear -x
   
 done
 
