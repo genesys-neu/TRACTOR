@@ -32,7 +32,7 @@ sshpass -p "scope" rsync -av ./raw $2:/root/traffic_gen/
 sleep 20
 clear -x
 echo "Configured all SRNs"
-sleep 10
+sleep 20
 
 for t in ./raw/*.csv
 do
@@ -45,18 +45,22 @@ do
   echo "***** Run traffic on UE *****"
   sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen.py -f ${t}" &
   UE_PID=$!
-  sleep 2 # let the traffic start
+  sleep 5 # let the traffic start
   
   if [ $# -eq 3 ] 
-  then
-    sshpass -p "sunflower" ssh $3 "cd /root/utils && sh uhd_tx_tone.sh" &
-    int_PID=$(sshpass -p "sunflower" ssh $3 "pgrep tx_wavefroms")
+    then
+      sshpass -p "sunflower" ssh $3 "cd /root/utils && sh uhd_tx_tone.sh" &
+      int_PID=`sshpass -p "sunflower" ssh $3 "pgrep tx_waveforms"`
+      echo "****** Returned PID: ${int_PID} ***********"
   fi
-  
-  
+    
   wait $gNB_PID # this will wait until gNB processes terminates
   wait $UE_PID # this will wait until gNB processes terminates
-  sshpass -p "sunflower" ssh $3 "kill -INT ${int_pid}"
+  
+  if [ $# -eq 3 ] 
+    then
+      sshpass -p "sunflower" ssh $3 "kill -INT ${int_PID}"
+  fi
 
   echo "***** Sleeping... *****"
   sleep 5 # sleep for a few second to allow all the classifier outputs to complete producing files
