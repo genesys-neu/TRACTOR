@@ -10,7 +10,12 @@ To enable IPsec
   start_ipsec.sh genesys-<gNB #node> genesys-<RIC #node>
 ```
 
-To add interference use the script: 
+To add RF interference use the script: 
 ```
-sh interference_tgen.sh
+sh interference_tgen.sh genesys-<gNB #node> genesys-<UE #node> genesys-<interference #node>
 ````
+
+There are several scripts to generate malicious UE traffic. 
+interference_tgen_p.sh represents a DoS attack by generating uplink packets with poisson distribution timing and gaussian distribution packet size.
+interference_tgen_uf.sh replays malicious DoS UDP attacks. The traces in the ./raw folder come from the dataset provided here: https://www.unb.ca/cic/datasets/ddos-2019.html.
+interference_tgen_bh.sh represents a bandwidth hog attack and uses the original 5G traces but adds a normally distributed RV to the packet size.
