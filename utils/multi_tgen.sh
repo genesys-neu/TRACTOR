@@ -21,9 +21,9 @@ sshpass -p "scope" ssh $gnb 'colosseumcli rf start 10042 -c'
 while IFS= read -r line; do
     echo "Configuring SRN: $line"
     sshpass -p "scope" scp radio_tgen.conf $line:/root/radio_api/
-    sshpass -p "scope" scp traffic_gen.py $line:/root/traffic_gen/
+    sshpass -p "scope" scp ./traffic_gen.py $line:/root/traffic_gen/
     sshpass -p "scope" ssh $line "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
-    sshpass -p "scope" rsync -av ./raw $line:/root/traffic_gen/
+    sshpass -p "scope" rsync -av ../raw $line:/root/traffic_gen/
     sleep 3
 done < $1
 
@@ -36,7 +36,7 @@ while IFS= read -r line; do
     if [ $line != $gnb ]
     then
     	echo "Starting TGEN for SRN: $line"
-    	trace=$(ls ./raw/*.csv | shuf -n 1)
+    	trace=$(ls ../raw/*.csv | shuf -n 1)
     	echo $trace
     	echo "Using trace: $trace for $num" >> ./$out_dir/$out_file
     	echo "Using ip: 172.16.0.${ip}"
