@@ -19,7 +19,9 @@ Then start the traffic generator on the UE. Make sure to use the same file for b
 It is recommended to use the -i (--ip) field for your implementation. The default IP address was configured for deployment in Colosseum using SCOPE. 
 The ports do not need to be specified UNLESS you are implementing multiple instances of traffic on the same device. Then you must specify an unique port for each instance.
 
--python contains our ML models
+- python contains our ML models
+
+- utils contains additional utilities
 
 ## Setup TRACTOR on Colosseum
 Requirements: 
@@ -70,14 +72,6 @@ python traffic_gen.py -f <playback file name>
 ```
 to start the predefined packet communication between gNB and UE on Colosseum.
 
-To re-play the traffic traces using multiple UEs use the script:
-```
-sh multi_tgen.sh config_file.txt
-```
-where config_file.txt is a text file that list the SRN for the experiment on seperate lines. The first line must be the gNB. See ex_config.txt for an example configuration file.
-The KPI results will be saved in a new directory called "output_config_file". A text file called "output_config_file.txt" will be generated that lists what trace is used for what UE.
-
-
 ### Generate random traffic from UE to the gNB
 To generate _random_ traffic, on UE node run:
 ```
@@ -85,8 +79,6 @@ iperf3 -c 172.16.0.1 -p 5204 -t <num seconds>
 ```
 where `<num seconds>` is the number of seconds to run for the traffic generator and `172.16.0.1` corresponds to the IP of the gNB in Colosseum.
 
-## IPsec
-To enable IPsec
-```
-  start_ipsec.sh genesys-<gNB #node> genesys-<RIC #node>
-```
+### Other Utilities 
+Additional utilities are found in the /utils directory. These utilities include utilizing multiple UEs, generating interference, generating malicious traffic, and enabling IPsec on the E2 interface.
+
