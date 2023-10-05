@@ -54,7 +54,7 @@ rec_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 rec_sock.bind(('', local_port))
 
 # iterating through the whole file
-rowcount = 10000000
+rowcount = 5000000
 
 print("Number of entries in csv", rowcount)
 
@@ -69,7 +69,7 @@ if UE:  # The UE should always start
             continue
         send_sock.sendto(Sdata, (Distant_IP, distant_port))
         if rowcount % 10000 == 0:
-             print('[UE] Progress '+str(100-100*rowcount/10000000))
+             print('[UE] Progress '+str(100-100*rowcount/5000000))
         rowcount -= 1
     
     print("[UE] test complete")
