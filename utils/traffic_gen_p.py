@@ -80,7 +80,7 @@ else:  # if we are the eNB, we need to wait for a message from the UE before mov
             last_time = time.time()
             break
             
-    while time.time()-last_time()<5:
+    while time.time()-last_time<5:
         data, address = rec_sock.recvfrom(4096)
         if data:
             last_time = time.time()

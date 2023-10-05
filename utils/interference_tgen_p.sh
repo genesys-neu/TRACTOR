@@ -19,10 +19,10 @@ sshpass -p "scope" scp traffic_gen_p.py $1:/root/traffic_gen/
 sshpass -p "scope" scp traffic_gen_p.py $2:/root/traffic_gen/
 
 
-#sleep 30
+sleep 30
 clear -x
 echo "Configured all SRNs"
-#sleep 30
+sleep 30
 
 t=1
 while [ $t -le 5 ]
