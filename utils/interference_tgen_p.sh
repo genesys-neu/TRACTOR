@@ -46,7 +46,7 @@ do
   sleep 5 # sleep for a few second to allow all the classifier outputs to complete producing files
   echo "***** Copy data *****"
 
-  tracename=${t}
+  tracename=${1}_${t}
 
 
   sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/mal_traf/poisson/${tracename}
@@ -55,6 +55,7 @@ do
   echo "***** Completed $t Preparing for next run *****"
   sleep 5 # sleep for a few second to allow the system to settle
   clear -x
+  t= $t+1
   
 done
 
