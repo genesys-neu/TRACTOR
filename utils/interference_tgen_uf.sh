@@ -4,6 +4,8 @@
 
 if [ ! -d "./interference/mal_traf/udp_flood" ]
   then
+    mkdir ./interference
+    mkdir ./interference/mal_traf
     mkdir ./interference/mal_traf/udp_flood
 fi
 
