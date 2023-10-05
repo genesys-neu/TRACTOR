@@ -54,7 +54,7 @@ rec_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 rec_sock.bind(('', local_port))
 
 # iterating through the whole file
-rowcount = 1000000
+rowcount = 10000000
 
 print("Number of entries in csv", rowcount)
 
@@ -63,13 +63,13 @@ if UE:  # The UE should always start
 
     start_time = time.time()
     while rowcount > 0:
-        data_size = int(math.ceil(random.gauss(mu=405, sigma=30)))
+        data_size = int(math.ceil(random.gauss(mu=1400, sigma=40)))
         Sdata = os.urandom(data_size)
         while time.time()-start_time < random.expovariate(lambd=1/0.000033):
             continue
         send_sock.sendto(Sdata, (Distant_IP, distant_port))
-        if rowcount % 1000 == 0:
-             print('[UE] Progress '+str(100*rowcount/1000000))
+        if rowcount % 10000 == 0:
+             print('[UE] Progress '+str(100-100*rowcount/10000000))
         rowcount -= 1
     
     print("[UE] test complete")

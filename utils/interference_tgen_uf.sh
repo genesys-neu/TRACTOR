@@ -40,14 +40,6 @@ do
   sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen_uf.py -f ${t}" &
   UE_PID=$!
   sleep 5 # let the traffic start
-  
-  if [ $# -eq 3 ] 
-    then
-      sshpass -p "sunflower" ssh $3 "cd /root/utils && sh uhd_tx_tone.sh" &
-      sleep 5 # let the tx process start
-      int_PID=`sshpass -p "sunflower" ssh $3 "pgrep tx_waveforms"`
-      echo "****** Returned PID: ${int_PID} ***********"
-  fi
     
   wait $gNB_PID # this will wait until gNB processes terminates
   wait $UE_PID # this will wait until gNB processes terminates
@@ -64,12 +56,8 @@ do
 
   tracename=$(basename ${t})
 
-  if [ $# -eq 3 ] 
-    then
-      sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/on/${3}/${tracename} 
-    else
-      sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/mal_traf/udp_flood/${tracename}
-  fi
+
+  sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/mal_traf/udp_flood/${tracename}
   sshpass -p "scope" ssh $1 "rm /root/radio_code/scope_config/metrics/csv/101*_metrics.csv"
   
   echo "***** Completed $t Preparing for next run *****"

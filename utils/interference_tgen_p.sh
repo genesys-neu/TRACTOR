@@ -25,7 +25,7 @@ echo "Configured all SRNs"
 sleep 30
 
 t=1
-while [ $t -le 5 ]
+while [ $t -le 6 ]
 do
   echo "TRACE $t"
   echo "***** Run traffic on gNB *****"
@@ -49,7 +49,7 @@ do
   tracename=${1}_${t}
 
 
-  sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/mal_traf/poisson/${tracename}
+  sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/mal_traf/poisson/${tracename}.csv
   sshpass -p "scope" ssh $1 "rm /root/radio_code/scope_config/metrics/csv/101*_metrics.csv"
   
   echo "***** Completed $t Preparing for next run *****"
