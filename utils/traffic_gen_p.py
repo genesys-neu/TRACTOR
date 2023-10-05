@@ -69,7 +69,7 @@ if UE:  # The UE should always start
             continue
         send_sock.sendto(Sdata, (Distant_IP, distant_port))
         if rowcount % 1000 == 0:
-             print('[UE] Progress '+str(rowcount/1000000))
+             print('[UE] Progress '+str(100*rowcount/1000000))
         rowcount -= 1
     
     print("[UE] test complete")
