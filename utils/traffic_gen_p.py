@@ -68,24 +68,12 @@ if UE:  # The UE should always start
         while time.time()-start_time < random.expovariate(lambd=1/0.000033):
             continue
         send_sock.sendto(Sdata, (Distant_IP, distant_port))
+        if rowcount % 1000 == 0:
+             print('[UE] Progress '+str(rowcount/1000000))
         rowcount -= 1
+    
+    print("[UE] test complete")
 
-else:  # if we are the eNB, we need to wait for a message from the UE before moving on
-    print("[gNB] waiting for UE")
+else:  # if we are the gNB
+    print("[gNB] doesn't do anything")
 
-    while True:
-        data, address = rec_sock.recvfrom(4096)
-        if data:
-            #print("[gNB] Starting experiment")
-            last_time = time.time()
-            break
-            
-    while time.time()-last_time<5:
-        data, address = rec_sock.recvfrom(4096)
-        if data:
-            last_time = time.time()
-
-            
-
-
-print('Test complete!')
