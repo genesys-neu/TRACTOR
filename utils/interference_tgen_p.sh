@@ -55,7 +55,7 @@ do
   echo "***** Completed $t Preparing for next run *****"
   sleep 5 # sleep for a few second to allow the system to settle
   clear -x
-  t= $t+1
+  t=$((t+1))
   
 done
 
