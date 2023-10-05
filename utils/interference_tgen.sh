@@ -36,14 +36,15 @@ sleep 20
 
 for t in ../raw/*.csv
 do
-  echo "TRACE $t"
+  tracename=$(basename ${t})
+  echo "TRACE ${tracename}"
   echo "***** Run traffic on gNB *****"
-  sshpass -p "scope" ssh -tt $1 "cd /root/traffic_gen && python traffic_gen.py --eNB -f ${t}" &   # this will have to let the next command go through
+  sshpass -p "scope" ssh -tt $1 "cd /root/traffic_gen && python traffic_gen.py --eNB -f ./raw/${tracename}" &   # this will have to let the next command go through
   gNB_PID=$!
   echo "Sleep for 5 secs"
   sleep 5  # let's wait few seconds
   echo "***** Run traffic on UE *****"
-  sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen.py -f ${t}" &
+  sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen.py -f ./raw/${tracename}" &
   UE_PID=$!
   sleep 5 # let the traffic start
   
@@ -67,8 +68,6 @@ do
   echo "***** Sleeping... *****"
   sleep 5 # sleep for a few second to allow all the classifier outputs to complete producing files
   echo "***** Copy data *****"
-
-  tracename=$(basename ${t})
 
   if [ $# -eq 3 ] 
     then

@@ -30,15 +30,16 @@ sleep 20
 
 for t in ./raw/*.csv
 do
-  echo "TRACE $t"
+  tracename=$(basename ${t})
+  echo "TRACE ${tracename}"
   echo "***** Run traffic on gNB *****"
   sshpass -p "scope" ssh $1 "rm /root/radio_code/scope_config/metrics/csv/101*_metrics.csv"
-  sshpass -p "scope" ssh -tt $1 "cd /root/traffic_gen && python traffic_gen_uf.py --eNB -f ${t}" &   # this will have to let the next command go through
+  sshpass -p "scope" ssh -tt $1 "cd /root/traffic_gen && python traffic_gen_uf.py --eNB -f ./raw/${tracename}" &   # this will have to let the next command go through
   gNB_PID=$!
   echo "Sleep for 5 secs"
   sleep 5  # let's wait few seconds
   echo "***** Run traffic on UE *****"
-  sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen_uf.py -f ${t}" &
+  sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen_uf.py -f ./raw/${tracename}" &
   UE_PID=$!
   sleep 5 # let the traffic start
     
@@ -55,7 +56,7 @@ do
   sleep 5 # sleep for a few second to allow all the classifier outputs to complete producing files
   echo "***** Copy data *****"
 
-  tracename=$(basename ${t})
+
 
 
   sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/mal_traf/udp_flood/${tracename}
