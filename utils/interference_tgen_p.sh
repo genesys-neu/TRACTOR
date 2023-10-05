@@ -29,6 +29,7 @@ while [ $t -le 6 ]
 do
   echo "TRACE $t"
   echo "***** Run traffic on gNB *****"
+  sshpass -p "scope" ssh $1 "rm /root/radio_code/scope_config/metrics/csv/101*_metrics.csv"
   sshpass -p "scope" ssh -tt $1 "cd /root/traffic_gen && python traffic_gen_p.py --eNB" &   # this will have to let the next command go through
   gNB_PID=$!
   echo "Sleep for 5 secs"
@@ -50,7 +51,6 @@ do
 
 
   sshpass -p "scope" scp $1:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./interference/mal_traf/poisson/${tracename}.csv
-  sshpass -p "scope" ssh $1 "rm /root/radio_code/scope_config/metrics/csv/101*_metrics.csv"
   
   echo "***** Completed $t Preparing for next run *****"
   sleep 5 # sleep for a few second to allow the system to settle
