@@ -4,6 +4,8 @@
 
 if [ ! -d "./interference/mal_traf/poisson" ]
   then
+    mkdir ./interference
+    mkdir ./interference/mal_traf
     mkdir ./interference/mal_traf/poisson
 fi
 
