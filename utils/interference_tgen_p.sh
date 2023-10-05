@@ -2,12 +2,17 @@
 ## HOW TO RUN: ./interference_tgen.sh genesys-gNB genesys-UE 
 
 
-#sshpass -p "scope" ssh $1 "colosseumcli rf start 1017 -c"
+if [ ! -d "./interference/mal_traf/poisson" ]
+  then
+    mkdir ./interference/mal_traf/poisson
+fi
 
-#sshpass -p "scope" scp radio_tgen.conf $1:/root/radio_api/
-#sshpass -p "scope" scp radio_tgen.conf $2:/root/radio_api/
-#sshpass -p "scope" ssh $1 "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
-#sshpass -p "scope" ssh $2 "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
+sshpass -p "scope" ssh $1 "colosseumcli rf start 1017 -c"
+
+sshpass -p "scope" scp radio_tgen.conf $1:/root/radio_api/
+sshpass -p "scope" scp radio_tgen.conf $2:/root/radio_api/
+sshpass -p "scope" ssh $1 "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
+sshpass -p "scope" ssh $2 "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
 sshpass -p "scope" scp traffic_gen_p.py $1:/root/traffic_gen/
 sshpass -p "scope" scp traffic_gen_p.py $2:/root/traffic_gen/
 
