@@ -1,12 +1,10 @@
 #!/bin/bash
-## HOW TO RUN: ./interference_tgen.sh genesys-gNB genesys-UE genesys-Interferance
+## HOW TO RUN: ./interference_tgen.sh genesys-gNB genesys-UE
 
 
-if [ ! -d "./interference" ]
+if [ ! -d "./interference/mal_traf/udp_flood" ]
   then
-    mkdir ./interference
-    mkdir ./interference/off
-    mkdir ./interference/on
+    mkdir ./interference/mal_traf/udp_flood
 fi
 
 sshpass -p "scope" ssh $1 "colosseumcli rf start 1017 -c"
@@ -21,12 +19,6 @@ sshpass -p "scope" rsync -av ./raw $1:/root/traffic_gen/
 
 sshpass -p "scope" ssh $2 "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
 sshpass -p "scope" rsync -av ./raw $2:/root/traffic_gen/
-
-if [ $# -eq 3 ] 
-  then
-    sshpass -p "sunflower" scp uhd_tx_tone.sh $3:/root/utils/
-    mkdir ./interference/on/${3}
-fi
 
 
 sleep 20
