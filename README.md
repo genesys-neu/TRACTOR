@@ -13,7 +13,7 @@ To use:
 python traffic_gen.py -f <playback file name> [--eNB <specify if this is the base station>] [--ip <Distant end IP address>] [-eNBp <eNB port>] [-UEp <UE port>]
 ```
 
-Always start the traffic generator on the eNB first using the -e (--eNB) flag.
+Always start the traffic generator on the eNB first using the --eNB flag.
 Then start the traffic generator on the UE. Make sure to use the same file for both. 
 
 It is recommended to use the -i (--ip) field for your implementation. The default IP address was configured for deployment in Colosseum using SCOPE. 
