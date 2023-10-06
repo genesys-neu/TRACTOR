@@ -10,7 +10,7 @@ This repository is organized as follows:
 - `traffic_gen.py` this is the script used to play back the raw data in colosseum.
 To use: 
 ```
-python traffic_gen.py -f <playback file name> [-e <specify if this is the base station>] [-i <Distant end IP address>] [-pb <eNB port>] [-pu <UE port>]
+python traffic_gen.py -f <playback file name> [--eNB <specify if this is the base station>] [--ip <Distant end IP address>] [-eNBp <eNB port>] [-UEp <UE port>]
 ```
 
 Always start the traffic generator on the eNB first using the -e (--eNB) flag.
