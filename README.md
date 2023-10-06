@@ -16,7 +16,7 @@ python traffic_gen.py -f <playback file name> [--eNB <specify if this is the bas
 Always start the traffic generator on the eNB first using the --eNB flag.
 Then start the traffic generator on the UE. Make sure to use the same file for both. 
 
-It is recommended to use the -i (--ip) field for your implementation. The default IP address was configured for deployment in Colosseum using SCOPE. 
+It is recommended to use the --ip field for your implementation. The default IP address was configured for deployment in Colosseum using SCOPE. 
 The ports do not need to be specified UNLESS you are implementing multiple instances of traffic on the same device. Then you must specify an unique port for each instance.
 
 - python contains our ML models
