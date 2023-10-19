@@ -1,6 +1,10 @@
 #!/bin/bash
 # args:
-# $1 : template of csv file to look for
+# ARGS:
+# 1 - gNB machine id
+# 2 - UE machine id
+# 3 - RIC machine id
+
 for t in ./raw/*.csv
 do
   echo "TRACE DIR $t"
