@@ -1,4 +1,9 @@
 #!/bin/bash
+# ARGS:
+# 1 - gNB machine id
+# 2 - UE machine id
+# 3 - RIC machine id
+
 #echo "Waiting few seconds to make sure the E2 connection has been established.."
 #sleep 15
 GNBID=`sshpass -p "ChangeMe" ssh $3 "docker logs e2term | grep -Eo 'gnb:[0-9]+-[0-9]+-[0-9]+' | tail -1"`
