@@ -1,4 +1,8 @@
 #!/bin/bash
+# ARGS:
+# 1 - gNB machine id
+# 2 - UE machine id
+# 3 - RIC machine id
 ## HOW TO RUN: ./setup_TRACTOR.sh genesys-<eNB #node> genesys-<UE #node> genesys-<RIC #node>
 
 only_build=false
