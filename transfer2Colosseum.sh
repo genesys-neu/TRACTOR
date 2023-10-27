@@ -5,9 +5,9 @@
 
 #!/bin/bash
 
-sshpass -p "ChangeMe" rsync -av -e ssh --exclude='colosseum' --exclude='.git' ../TRACTOR $3:/root/.
-sshpass -p "scope" rsync -av -e ssh --exclude='colosseum' --exclude='.git' ../TRACTOR $1:/root/.
-sshpass -p "scope" rsync -av -e ssh --exclude='colosseum' --exclude='.git' ../TRACTOR $2:/root/.
+sshpass -p "ChangeMe" rsync -av -e ssh --exclude={'colosseum','.git','logs','utils/raw'} ../TRACTOR $3:/root/.
+sshpass -p "scope" rsync -av -e ssh --exclude=={'colosseum','.git','logs','utils/raw'} ../TRACTOR $1:/root/.
+sshpass -p "scope" rsync -av -e ssh --exclude=={'colosseum','.git','logs','utils/raw'} ../TRACTOR $2:/root/.
 
 sshpass -p "ChangeMe" ssh $3 'docker cp /root/TRACTOR sample-xapp-24:/home/sample-xapp/.'
 sshpass -p "ChangeMe" ssh $3 'docker exec sample-xapp-24 mv /home/sample-xapp/TRACTOR/run_xapp.sh /home/sample-xapp/. && docker exec sample-xapp-24 chmod +x /home/sample-xapp/run_xapp.sh'
