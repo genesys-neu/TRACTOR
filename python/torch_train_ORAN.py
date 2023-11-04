@@ -6,13 +6,15 @@ import time
 from torch import nn
 from torch.utils.data import DataLoader
 from ORAN_dataset import *
+from scipy.stats import norm as normal
+import statistics
 
 import ray.train as train
 from ray.train.torch import TorchTrainer, TorchPredictor
 from ray.air.config import ScalingConfig
 from ray.air import session, Checkpoint
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
-from ORAN_dataset import load_csv_traces
+from ORAN_dataset import load_csv_traces, relative_timestamp
 
 from sklearn.metrics import confusion_matrix as conf_mat
 import seaborn as sn
@@ -34,8 +36,8 @@ ds_test = None
 Nclass = None
 train_config = {"lr": 1e-3, "batch_size": 512, "epochs": 350}
 
-def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
-    if not isDebug:
+def train_epoch(dataloader, model, loss_fn, optimizer, useRay=False):
+    if useRay:
         size = len(dataloader.dataset) // session.get_world_size()
     else:
         size = len(dataloader.dataset)
@@ -43,6 +45,9 @@ def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
     start_time = time.time()
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction error
+        X = X.to(device)
+        y = y.to(device)
+
         pred = model(X)
         loss = loss_fn(pred, y)
     
@@ -57,8 +62,8 @@ def train_epoch(dataloader, model, loss_fn, optimizer, isDebug=False):
     print("--- %s seconds ---" % (time.time() - start_time))
     return (time.time() - start_time)
 
-def validate_epoch(dataloader, model, loss_fn, Nclasses, isDebug=False):
-    if not isDebug:
+def validate_epoch(dataloader, model, loss_fn, Nclasses, useRay=False, logdir='.'):
+    if useRay:
         size = len(dataloader.dataset) // session.get_world_size()
     else:
         size = len(dataloader.dataset)
@@ -68,10 +73,13 @@ def validate_epoch(dataloader, model, loss_fn, Nclasses, isDebug=False):
     conf_matrix = np.zeros((Nclasses, Nclasses))
     with torch.no_grad():
         for X, y in dataloader:
+            X = X.to(device)
+            y = y.to(device)
+
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-            conf_matrix += conf_mat(y, pred.argmax(1), labels=list(range(Nclasses)))
+            conf_matrix += conf_mat(y.cpu(), pred.argmax(1).cpu(), labels=list(range(Nclasses)))
     test_loss /= num_batches
     correct /= size
     print(
@@ -79,22 +87,28 @@ def validate_epoch(dataloader, model, loss_fn, Nclasses, isDebug=False):
         f"Accuracy: {(100 * correct):>0.1f}%, "
         f"Avg loss: {test_loss:>8f} \n"
     )
-    pickle.dump(conf_matrix, open('conf_matrix.last.pkl', 'wb'))
-    return test_loss
+
+    return test_loss, conf_matrix
 
 
-def train_func(config: Dict, check_zeros: bool):
+def train_func(config: Dict):
     batch_size = config["batch_size"]
     lr = config["lr"]
     epochs = config["epochs"]
     Nclass = config["Nclass"]
-    isDebug = config['isDebug']
+    useRay = config['useRay']
     slice_len = config['slice_len']
     num_feats = config['num_feats']
     global_model = config['global_model']
     model_postfix = config['model_postfix']
+    device = config['device']
+    logdir = config['logdir']
+    pos_enc = config['pos_enc']
 
-    if isDebug:
+    # num of epochs tolerated without improvement in loss during training
+    patience = 15
+
+    if not useRay:
         worker_batch_size = batch_size
     else:
         worker_batch_size = batch_size // session.get_world_size()
@@ -103,20 +117,27 @@ def train_func(config: Dict, check_zeros: bool):
     train_dataloader = DataLoader(ds_train, batch_size=worker_batch_size, shuffle=True)
     test_dataloader = DataLoader(ds_test, batch_size=worker_batch_size, shuffle=True)
 
-    if not isDebug:
+    if useRay:
         train_dataloader = train.torch.prepare_data_loader(train_dataloader)
         test_dataloader = train.torch.prepare_data_loader(test_dataloader)
 
     # Create model.
-    model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
-    if not isDebug:
+    if global_model == TransformerNN:
+        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1)
+    else:
+        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
+    if useRay:
         model = train.torch.prepare_model(model)
+    else:
+        model.to(device)
+
+
 
     loss_fn = nn.NLLLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     from torch.optim.lr_scheduler import ReduceLROnPlateau
     
-    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=6, min_lr=0.00001, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=5, min_lr=1e-5, verbose=True)
     loss_results = []
     
     print(model)
@@ -129,13 +150,17 @@ def train_func(config: Dict, check_zeros: bool):
     epochs_wo_improvement = 0
     times = []
     for e in range(epochs):
-        ep_time = train_epoch(train_dataloader, model, loss_fn, optimizer, isDebug)
+        ep_time = train_epoch(train_dataloader, model, loss_fn, optimizer, useRay)
         times.append(ep_time)
-        loss = validate_epoch(test_dataloader, model, loss_fn, Nclasses=Nclass, isDebug=isDebug)
+        loss, cm = validate_epoch(test_dataloader, model, loss_fn, Nclasses=Nclass,useRay=useRay)
+        if not useRay:
+            pickle.dump(cm, open(os.path.join(logdir, 'conf_matrix.last.pkl'), 'wb'))
+        else:
+            pickle.dump(cm, open('conf_matrix.last.pkl', 'wb'))
         scheduler.step(loss)
         loss_results.append(loss)
         epochs_wo_improvement += 1
-        if not isDebug:
+        if useRay:
 
             # store checkpoint only if the loss has improved
             state_dict = model.state_dict()
@@ -149,15 +174,14 @@ def train_func(config: Dict, check_zeros: bool):
             if best_loss > loss:
                 epochs_wo_improvement = 0
                 best_loss = loss
-                ctrl_suffix = '.ctrl' if check_zeros else ''
-                model_name = f'model.{slice_len}.{model_postfix}{ctrl_suffix}.pt'
-                # torch.save({
-                #     'model_state_dict': model.state_dict(),
-                #     'optimizer_state_dict': optimizer.state_dict(),
-                #     'loss': loss,
-                # }, os.path.join('./', model_name))
+                model_name = f'model.{slice_len}.{model_postfix}.pt'
+                torch.save({
+                     'model_state_dict': model.state_dict(),
+                     'optimizer_state_dict': optimizer.state_dict(),
+                     'loss': loss,
+                }, os.path.join(logdir, model_name))
 
-        if epochs_wo_improvement > 12: # early stopping
+        if epochs_wo_improvement > patience: # early stopping
             print('------------------------------------')
             print('Early termination implemented at epoch:', e+1)
             print('------------------------------------')
@@ -165,7 +189,8 @@ def train_func(config: Dict, check_zeros: bool):
             sd = np.std(times)
             mean = np.mean(times)
             print(f'Mean: {mean}, std: {sd}')
-            with open('tr_time.txt', 'a') as f:
+            timing_file = 'tr_time.txt' if useRay else os.path.join(logdir, 'tr_time.txt')
+            with open(timing_file, 'a') as f:
                 f.write(f'Model {config["model_postfix"]} with slice {slice_len}:\n')
                 f.write(f'Mean: {mean}, std: {sd}, num. epochs: {e+1}\n')
             return loss_results
@@ -248,45 +273,101 @@ def timing_inference_GPU(dummy_input, model):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ds_file", required=True, help="Name of dataset pickle file containing training data and labels.")
-    parser.add_argument("--ds_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/", help="Specify path where dataset files are stored")
+    parser.add_argument("--ds_file", nargs='+', required=True, help="Name of dataset pickle file containing training data and labels.")
+    parser.add_argument("--ds_path", default="../logs/", help="Specify path where dataset files are stored")
     parser.add_argument("--isNorm", default=False, action='store_true', help="Specify to load the normalized dataset." )
-    parser.add_argument("--isDebug", action='store_true', default=False, help="Run in debug mode")
-    parser.add_argument("--address", required=False, type=str, help="the address to use for Ray")
-    parser.add_argument("--num-workers", "-n", type=int, default=2, help="Sets number of workers for training.")
-    parser.add_argument("--use-gpu", action="store_true", default=False, help="Enables GPU training")
     parser.add_argument("--test", default=None, choices=['val', 'traces'], help="Testing the model") # TODO visualize capture and then perform classification after loading model
     parser.add_argument("--relabel_test", action="store_true", default=False, help="Perform ctrl label correction during testing time") 
-    parser.add_argument("--cp_path", help='Path to the checkpoint to load at test time.')
+    parser.add_argument("--cp_path", help='Path to save/load checkpoint and training logs')
+    parser.add_argument("--exp_name", default='', help="Name of this experiment")
     parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
     parser.add_argument("--transformer", default=None, choices=['v1', 'v2'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
+    parser.add_argument("--pos_enc",  action="store_true", default=False, help="Use positional encoder (only applied to transformer arch)")
+    parser.add_argument("--useRay", action='store_true', default=False, help="Run training using Ray")
+    parser.add_argument("--address", required=False, type=str, help="[Deprecated] the address to use for Ray")
+    parser.add_argument("--num-workers", "-n", type=int, default=2, help="[Deprecated] Sets number of workers for training.")
+    parser.add_argument("--use-gpu", action="store_true", default=False, help="[Deprecated] Enables GPU training")
+
     args, _ = parser.parse_known_args()
     if args.transformer is not None:
         transformer = TransformerNN if args.transformer == 'v1' else TransformerNN_v2
-    ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path)
-    ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path)
 
+    ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path, relabel_CTRL=False)
+    ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path, relabel_CTRL=False)
     ds_info = ds_train.info()
+
+    print(ds_info)
+
+    logdir = os.path.join(args.cp_path, args.exp_name)
+
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir, exist_ok=True)
+
+    ixs_ctrl = ds_train.obs_labels == 3
+    all_ctrl = ds_train.obs_input[ixs_ctrl]
+    include_ixs = [1] + [x for x in range(3,ds_train.obs_input.shape[-1])]    # exclude column 0 (Timestamp) and 2 (IMSI)
+    mean_ctrl_sample = torch.mean(all_ctrl[:, :, include_ixs], dim=0)
+    std_ctrl_sample = torch.std(all_ctrl[:, :, include_ixs], dim=0)
+
+    normp = pickle.load(open(os.path.join(args.ds_path, args.norm_param_path), "rb"))
+    [print(i, ':', normp[c]['name']) for i, c in enumerate(include_ixs)]
+    # compute euclidean distance between samples of other classes and mean ctrl sample
+    for cl in [0,1,2,3]:
+        print("Difference of mean class ctrl (4) with class", cl)
+        ixs_this = ds_train.obs_labels == cl
+        all_this = ds_train.obs_input[ixs_this]
+        norm = np.linalg.norm(all_this[:, :, include_ixs] - mean_ctrl_sample, axis=(1, 2))
+        print("Mean norm", np.mean(norm), "Std.", np.std(norm))
+        x_axis = np.arange(0, 15, 0.01)
+        plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class '+str(cl))
+    plt.legend()
+    plt.show()
+
+    plt.imshow(mean_ctrl_sample)
+    plt.colorbar()
+    plt.show()
+    plt.imshow(std_ctrl_sample)
+    plt.colorbar()
+    plt.show()
+
+    # show a barplot representing the amount of samples that should be relabeled
+    obs_excludecols = ds_train.obs_input[:, :, include_ixs]
+    norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
+    possible_ctrl_ixs = norm < 2.
+    possible_ctrl_labels = ds_train.obs_labels[possible_ctrl_ixs].numpy()
+    unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
+    plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
+    plt.show()
+
+    ds_train.relabel_ctrl_samples()
+    ds_test.relabel_ctrl_samples()
+
+    print(ds_train.info())
 
     Nclass = ds_info['nclasses']
     train_config['Nclass'] = Nclass
-    train_config['isDebug'] = args.isDebug
+    train_config['useRay'] = args.useRay
     train_config['slice_len'] = ds_info['slice_len']
     train_config['num_feats'] = ds_info['numfeats']
+    train_config['logdir'] = logdir
+    train_config['pos_enc'] = args.pos_enc
+
     if args.transformer is None:
         train_config['global_model'] = ConvNN
     else:
         train_config['global_model'] = transformer
     train_config['model_postfix'] = 'trans_' + args.transformer if args.transformer is not None else 'cnn'
 
+    device = torch.device("cuda")
+    train_config['device'] = device
+
     if args.test is None:
-        check_zeros = args.ds_file.split('_')[-2] == 'ctrlcorrected'
-        if not train_config['isDebug']:
+        if train_config['useRay']:
             import ray
             ray.init(address=args.address)
             train_ORAN_ds(num_workers=args.num_workers, use_gpu=args.use_gpu)
         else:
-            train_func(train_config, check_zeros)
+            train_func(train_config)
 
         #debug_train_func(train_config)
     else: 
@@ -296,8 +377,8 @@ if __name__ == "__main__":
 
         global_model = train_config['global_model']
         model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
-        device = torch.device("cuda")
-        if args.isDebug:
+
+        if not args.useRay:
             model.load_state_dict(torch.load(cp_path, map_location='cuda:0')['model_state_dict'])
         else:
             cp = Checkpoint(local_path=cp_path)
@@ -352,44 +433,45 @@ if __name__ == "__main__":
             y_true = []
             y_output = []
             with torch.no_grad():
-                for tix, dtrace in enumerate(traces):
-                    print('------------ Trial', tix+1, '------------')
+                for trial_ix, dtrace in enumerate(traces):  # TODO verify this is doing the right thing
+                    print('------------ Trial', trial_ix + 1, '------------')
                     trial_y_true = []
                     trial_y_output = []
                     for k in dtrace.keys():
                         num_correct = 0
-                        tr = dtrace[k].values
-                        #correct_class = classmap[k]
                         output_list_kpi = []
                         output_list_y = []
-                        for t in range(tr.shape[0]):
-                            if t + train_config['slice_len'] < tr.shape[0]:
-                                input_sample = tr[t:t + train_config['slice_len']]
-                                input = torch.Tensor(input_sample[np.newaxis, :, :])
-                                input = input.to(device)    # transfer input data to GPU
-                                pred = model(input)
-                                class_ix = pred.argmax(1)
-                                correct_class = classmap[k]
-                                if check_zeros:
-                                    zeros = (input_sample == 0).astype(int).sum(axis=1)
-                                    if (zeros > 10).all():
-                                        correct_class = 3 # control if all KPIs rows have > 10 zeros
-                                co = class_ix.cpu().numpy()[0]
-                                #if co == correct_class:
-                                #    num_correct += 1
-                                y_true.append(correct_class)
-                                y_output.append(co)
-                                trial_y_true.append(correct_class)
-                                trial_y_output.append(co)
-                                output_list_kpi.append(tr[t])
-                                output_list_y.append(co)
+                        for trace_ix, trace in enumerate(dtrace):
+                            tr = trace[k].values
+                            #correct_class = classmap[k]
+                            for t in range(tr.shape[0]):
+                                if t + train_config['slice_len'] < tr.shape[0]:
+                                    input_sample = tr[t:t + train_config['slice_len']]
+                                    input = torch.Tensor(input_sample[np.newaxis, :, :])
+                                    input = input.to(device)    # transfer input data to GPU
+                                    pred = model(input)
+                                    class_ix = pred.argmax(1)
+                                    correct_class = classmap[k]
+                                    if check_zeros:
+                                        zeros = (input_sample == 0).astype(int).sum(axis=1)
+                                        if (zeros > 10).all():
+                                            correct_class = 3 # control if all KPIs rows have > 10 zeros
+                                    co = class_ix.cpu().numpy()[0]
+                                    #if co == correct_class:
+                                    #    num_correct += 1
+                                    y_true.append(correct_class)
+                                    y_output.append(co)
+                                    trial_y_true.append(correct_class)
+                                    trial_y_output.append(co)
+                                    output_list_kpi.append(tr[t])
+                                    output_list_y.append(co)
 
-                            #mean, stddev = timing_inference_GPU(input, model)
-                        #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
-                        assert (len(output_list_kpi) == len(output_list_y))
-                        plot_trace_class(output_list_kpi, output_list_y,
-                                        'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(
-                                            tix + 1) + '_' + k, train_config['slice_len'], head=len(output_list_kpi), save_plain=True)
+                                #mean, stddev = timing_inference_GPU(input, model)
+                            #print('[',k,'] Correct % ', num_correct/tr.shape[0]*100)
+                            assert (len(output_list_kpi) == len(output_list_y))
+                            plot_trace_class(output_list_kpi, output_list_y,
+                                            'traces_pdf_train_slice' + str(train_config['slice_len']) + '/trial' + str(trial_ix + 1) + '_' + k + '_trace' + str(trace_ix)
+                                             , train_config['slice_len'], head=len(output_list_kpi), save_plain=True)
                     trial_cm = conf_mat(trial_y_true, trial_y_output, labels=list(range(len(classmap.keys()))))
 
                     for r in range(trial_cm.shape[0]):  # for each row in the confusion matrix

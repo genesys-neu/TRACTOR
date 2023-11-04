@@ -63,10 +63,15 @@ class TransformerNN(nn.Module):
     def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
                  dropout: float = 0.2, use_pos: bool = False):
         super(TransformerNN, self).__init__()
+
+        if use_pos:
+            num_feats = num_feats - 1 # exclude the timestamp column (0) that will be used for positional encoding
+
         self.norm = nn.LayerNorm(num_feats)
         # create the positional encoder
         self.use_positional_enc = use_pos
-        self.pos_encoder = PositionalEncoding(num_feats + 1, dropout)
+
+        self.pos_encoder = PositionalEncoding(num_feats + 1, dropout) if use_pos else None
         # define the encoder layers
         encoder_layers = TransformerEncoderLayer(num_feats, nhead, batch_first=True)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
@@ -74,7 +79,7 @@ class TransformerNN(nn.Module):
 
         # we will not use the decoder
         # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
-        self.pre_classifier = torch.nn.Linear(num_feats *slice_len, 256)
+        self.pre_classifier = torch.nn.Linear(num_feats*slice_len, 256)
         self.dropout = torch.nn.Dropout(dropout)
         self.classifier = torch.nn.Linear(256, classes)
         self.logSoftmax = nn.LogSoftmax(dim=1)
@@ -107,6 +112,7 @@ class TransformerNN_v2(nn.Module):
     def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
                  dropout: float = 0.2, use_pos: bool = False):
         super(TransformerNN_v2, self).__init__()
+
         self.norm = nn.LayerNorm(num_feats)
         # create the positional encoder
         self.use_positional_enc = use_pos
@@ -150,10 +156,10 @@ class TransformerNN_v2(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 100000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
-
+        self.max_len = max_len
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
         # ToDo: try the following change
@@ -169,12 +175,39 @@ class PositionalEncoding(nn.Module):
 
         self.register_buffer('pe', pe)
 
+        import matplotlib.pyplot as plt
+        np_pe = np.array(pe[0])
+        plt.imshow(np_pe.T, aspect='auto')
+        # plt.colorbar()
+        plt.show()
+
     def forward(self, x):
         """
         Args:
             x: Tensor, shape [batch_size, seq_len, features]
         """
-        # x = x + self.pe[:x.size(0)]
-        x = x + self.pe[:, :x.size(1)]
+
+        #x = x + self.pe[:, :x.size(1)]
+
+        rel_time_ix_info = x[:, :, 0]
+        x = x[:, :, 1:]
+        """
+        # alternative method to compute this, but below should be faster
+        all_pe = torch.zeros((x.shape[0], x.shape[1], x.shape[2]))
+        for s in range(x.shape[0]): # iterate over sample in batch
+            s_timeinfo_ix = torch.clip(rel_time_ix_info[s], max=self.max_len-1).to(torch.long)
+            all_pe[s] = self.pe[:, s_timeinfo_ix]
+        """
+
+
+        all_pe = torch.stack(
+            [self.pe[:, torch.clip(s, max=self.max_len-1).to(torch.long)]
+                for s in torch.unbind(rel_time_ix_info, dim=0)]
+            , dim=0).squeeze()
+
+        if x.device.type == 'cuda':
+            all_pe = all_pe.to(x.device)
+        x = x + all_pe
+
         return self.dropout(x)
 

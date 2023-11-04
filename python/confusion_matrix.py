@@ -22,6 +22,8 @@ for d in sorted(dirs):
     figname = os.path.join(d, args.figname)
 
     out = glob(os.path.join(d, '*/rank*'))
+    if len(out) == 0:
+        out = [d]
     conf_mat = None
     tot_samples = []
     correct_samples = []
