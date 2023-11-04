@@ -63,11 +63,13 @@ if UE:  # The UE should always start
 
     start_time = time.time()
     while rowcount > 0:
-        data_size = int(math.ceil(random.gauss(mu=8000, sigma=80)))
+        data_size = int(math.ceil(random.gauss(mu=404, sigma=10)))
         Sdata = os.urandom(data_size)
-        while time.time()-start_time < random.expovariate(lambd=1/0.000033):
+        next_arrival = random.expovariate(lambd=1/0.000033)
+        while time.time()-start_time < next_arrival:
             continue
         send_sock.sendto(Sdata, (Distant_IP, distant_port))
+        start_time = time.time()
         if rowcount % 50000 == 0:
              print('[UE] Progress '+str(100-100*rowcount/5000000))
         rowcount -= 1
