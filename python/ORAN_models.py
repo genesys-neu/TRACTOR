@@ -73,7 +73,8 @@ class TransformerNN(nn.Module):
 
         self.pos_encoder = PositionalEncoding(num_feats + 1, dropout) if use_pos else None
         # define the encoder layers
-        encoder_layers = TransformerEncoderLayer(num_feats, nhead, batch_first=True)
+
+        encoder_layers = TransformerEncoderLayer(d_model=num_feats, nhead=nhead, batch_first=True)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         self.d_model = num_feats
 
@@ -156,7 +157,7 @@ class TransformerNN_v2(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 100000):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 50000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         self.max_len = max_len
@@ -174,13 +175,13 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0)
 
         self.register_buffer('pe', pe)
-
+        """
         import matplotlib.pyplot as plt
         np_pe = np.array(pe[0])
         plt.imshow(np_pe.T, aspect='auto')
         # plt.colorbar()
         plt.show()
-
+        """
     def forward(self, x):
         """
         Args:

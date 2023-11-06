@@ -94,6 +94,8 @@ def validate_epoch(dataloader, model, loss_fn, Nclasses, useRay=False, logdir='.
 def train_func(config: Dict):
     batch_size = config["batch_size"]
     lr = config["lr"]
+    lrmin = config["lrmin"]
+    lrpatience = config["lrpatience"]
     epochs = config["epochs"]
     Nclass = config["Nclass"]
     useRay = config['useRay']
@@ -104,9 +106,9 @@ def train_func(config: Dict):
     device = config['device']
     logdir = config['logdir']
     pos_enc = config['pos_enc']
+    patience = config['patience'] # num of epochs tolerated without improvement in loss during training
 
-    # num of epochs tolerated without improvement in loss during training
-    patience = 15
+
 
     if not useRay:
         worker_batch_size = batch_size
@@ -137,7 +139,7 @@ def train_func(config: Dict):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     from torch.optim.lr_scheduler import ReduceLROnPlateau
     
-    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=5, min_lr=1e-5, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=lrpatience, min_lr=lrmin, verbose=True)
     loss_results = []
     
     print(model)
@@ -283,7 +285,12 @@ if __name__ == "__main__":
     parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
     parser.add_argument("--transformer", default=None, choices=['v1', 'v2'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
     parser.add_argument("--pos_enc",  action="store_true", default=False, help="Use positional encoder (only applied to transformer arch)")
+    parser.add_argument("--patience", type=int, default=30, help="Num of epochs to wait before interrupting training with early stopping")
+    parser.add_argument("--lrmax", type=float, default=1e-3,help="Initial learning rate ")
+    parser.add_argument("--lrmin", type=float, default=1e-5, help="Final learning rate after scheduling ")
+    parser.add_argument("--lrpatience", type=int, default=5, help="Patience before triggering learning rate decrease")
     parser.add_argument("--useRay", action='store_true', default=False, help="Run training using Ray")
+    parser.add_argument("--info_verbose", action='store_true', default=False, help="Print/plot some info about dataset visualization. ")
     parser.add_argument("--address", required=False, type=str, help="[Deprecated] the address to use for Ray")
     parser.add_argument("--num-workers", "-n", type=int, default=2, help="[Deprecated] Sets number of workers for training.")
     parser.add_argument("--use-gpu", action="store_true", default=False, help="[Deprecated] Enables GPU training")
@@ -311,38 +318,39 @@ if __name__ == "__main__":
 
     normp = pickle.load(open(os.path.join(args.ds_path, args.norm_param_path), "rb"))
     [print(i, ':', normp[c]['name']) for i, c in enumerate(include_ixs)]
-    # compute euclidean distance between samples of other classes and mean ctrl sample
-    for cl in [0,1,2,3]:
-        print("Difference of mean class ctrl (4) with class", cl)
-        ixs_this = ds_train.obs_labels == cl
-        all_this = ds_train.obs_input[ixs_this]
-        norm = np.linalg.norm(all_this[:, :, include_ixs] - mean_ctrl_sample, axis=(1, 2))
-        print("Mean norm", np.mean(norm), "Std.", np.std(norm))
-        x_axis = np.arange(0, 15, 0.01)
-        plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class '+str(cl))
-    plt.legend()
-    plt.show()
+    if args.info_verbose:
+        # compute euclidean distance between samples of other classes and mean ctrl sample
+        for cl in [0,1,2,3]:
+            print("Difference of mean class ctrl (4) with class", cl)
+            ixs_this = ds_train.obs_labels == cl
+            all_this = ds_train.obs_input[ixs_this]
+            norm = np.linalg.norm(all_this[:, :, include_ixs] - mean_ctrl_sample, axis=(1, 2))
+            print("Mean norm", np.mean(norm), "Std.", np.std(norm))
+            x_axis = np.arange(0, 15, 0.01)
+            plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class '+str(cl))
+        plt.legend()
+        plt.show()
 
-    plt.imshow(mean_ctrl_sample)
-    plt.colorbar()
-    plt.show()
-    plt.imshow(std_ctrl_sample)
-    plt.colorbar()
-    plt.show()
+        plt.imshow(mean_ctrl_sample)
+        plt.colorbar()
+        plt.show()
+        plt.imshow(std_ctrl_sample)
+        plt.colorbar()
+        plt.show()
 
-    # show a barplot representing the amount of samples that should be relabeled
-    obs_excludecols = ds_train.obs_input[:, :, include_ixs]
-    norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
-    possible_ctrl_ixs = norm < 2.
-    possible_ctrl_labels = ds_train.obs_labels[possible_ctrl_ixs].numpy()
-    unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
-    plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
-    plt.show()
+        # show a barplot representing the amount of samples that should be relabeled
+        obs_excludecols = ds_train.obs_input[:, :, include_ixs]
+        norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
+        possible_ctrl_ixs = norm < 2.
+        possible_ctrl_labels = ds_train.obs_labels[possible_ctrl_ixs].numpy()
+        unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
+        plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
+        plt.show()
 
-    ds_train.relabel_ctrl_samples()
-    ds_test.relabel_ctrl_samples()
+        ds_train.relabel_ctrl_samples()
+        ds_test.relabel_ctrl_samples()
 
-    print(ds_train.info())
+        print(ds_train.info())
 
     Nclass = ds_info['nclasses']
     train_config['Nclass'] = Nclass
@@ -351,6 +359,7 @@ if __name__ == "__main__":
     train_config['num_feats'] = ds_info['numfeats']
     train_config['logdir'] = logdir
     train_config['pos_enc'] = args.pos_enc
+    train_config['patience'] = args.patience
 
     if args.transformer is None:
         train_config['global_model'] = ConvNN
@@ -360,6 +369,10 @@ if __name__ == "__main__":
 
     device = torch.device("cuda")
     train_config['device'] = device
+
+    train_config['lr'] = args.lrmax
+    train_config['lrmin'] = args.lrmin
+    train_config['lrpatience'] = args.lrpatience
 
     if args.test is None:
         if train_config['useRay']:
