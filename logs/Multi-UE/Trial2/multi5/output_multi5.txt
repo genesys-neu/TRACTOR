@@ -1,0 +1,5 @@
+Using trace: ./raw/mmtc_03_03.csv for 1010123456002
+Using trace: ./raw/urll_11_18.csv for 1010123456003
+Using trace: ./raw/mmtc_05_18.csv for 1010123456004
+Using trace: ./raw/urllc_03_03.csv for 1010123456005
+Using trace: ./raw/urllc_04_10.csv for 1010123456006

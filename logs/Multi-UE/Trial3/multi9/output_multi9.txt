@@ -1,0 +1,9 @@
+Using trace: ./raw/mmtc_04_10.csv for 1010123456002
+Using trace: ./raw/embb_2.csv for 1010123456003
+Using trace: ./raw/embb_05_18_b.csv for 1010123456004
+Using trace: ./raw/embb_03_03b.csv for 1010123456005
+Using trace: ./raw/urllc_3.csv for 1010123456006
+Using trace: ./raw/embb_03_03c.csv for 1010123456007
+Using trace: ./raw/URLLC_06_12.csv for 1010123456008
+Using trace: ./raw/mmtc_04_10.csv for 1010123456009
+Using trace: ./raw/urllc_3.csv for 1010123456010
