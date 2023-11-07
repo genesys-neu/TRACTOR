@@ -64,7 +64,9 @@ def check_slices(data, index, check_zeros=False):
 data_type_choice = ["singleUE_clean", "singleUE_raw", "multiUE"]
 
 
-def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mode='emuc', data_type="singleUE_clean", check_zeros=False):
+def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
+                      mode='emuc', data_type="singleUE_clean",
+                      check_zeros=False, drop_colnames=[]):
 
     isControlClass = True if 'c' in mode else False
     allowed_types = data_type_choice
@@ -114,7 +116,9 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
                     # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
                     if not isRaw:
                         columns_drop = ['Timestamp', 'tx_errors downlink (%)'] # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
-                        trace.drop(columns_drop, axis=1, inplace=True)
+                    else:
+                        columns_drop = drop_colnames
+                    trace.drop(columns_drop, axis=1, inplace=True)
 
                     new_trace = slice_dataset(trace, slice_len)
 
@@ -194,7 +198,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8, mod
                     if cols_names is None:
                         cols_names = ds.columns.values
                     # slicing
-                    columns_drop = []   # TODO determine what columns to drop
+                    columns_drop = drop_colnames
                     if len(columns_drop) > 0:
                         ds.drop(columns_drop, axis=1, inplace=True)
                     new_trace = slice_dataset(ds, slice_len)
@@ -481,6 +485,7 @@ if __name__ == "__main__":
                              '2) "emuc" include CTRL class; '
                              '3) "co" is specific to CTRL traffic and will generate a separate class for every other type of traffic.')
     parser.add_argument("--data_type", default="singleUE_clean", nargs='+', choices=data_type_choice, help="This argument specifies the type of KPI traces to read into the dataset.")
+    parser.add_argument("--drop_colnames", default=[], nargs='*', help="Remove specified column names from data frame when loaded from .csv files.s")
     args, _ = parser.parse_known_args()
 
     from visualize_inout import classmap
@@ -490,7 +495,9 @@ if __name__ == "__main__":
     trials_multi = args.trials_multi
     for data_type in args.data_type:
         trials = trials_multi if "multi" in data_type else trials
-        dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path, mode=args.mode, data_type=data_type, check_zeros=args.check_zeros)
+        dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path,
+                                                 mode=args.mode, data_type=data_type, check_zeros=args.check_zeros,
+                                                 drop_colnames=args.drop_colnames)
 
         file_suffix = ''
         for t in trials:

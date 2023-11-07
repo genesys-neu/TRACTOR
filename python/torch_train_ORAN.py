@@ -155,15 +155,12 @@ def train_func(config: Dict):
         ep_time = train_epoch(train_dataloader, model, loss_fn, optimizer, useRay)
         times.append(ep_time)
         loss, cm = validate_epoch(test_dataloader, model, loss_fn, Nclasses=Nclass,useRay=useRay)
-        if not useRay:
-            pickle.dump(cm, open(os.path.join(logdir, 'conf_matrix.last.pkl'), 'wb'))
-        else:
-            pickle.dump(cm, open('conf_matrix.last.pkl', 'wb'))
+
         scheduler.step(loss)
         loss_results.append(loss)
         epochs_wo_improvement += 1
         if useRay:
-
+            pickle.dump(cm, open('conf_matrix.last.pkl', 'wb'))
             # store checkpoint only if the loss has improved
             state_dict = model.state_dict()
             consume_prefix_in_state_dict_if_present(state_dict, "module.")
@@ -174,6 +171,7 @@ def train_func(config: Dict):
             session.report(dict(loss=loss), checkpoint=checkpoint)
         else:
             if best_loss > loss:
+                pickle.dump(cm, open(os.path.join(logdir, 'conf_matrix.last.pkl'), 'wb'))
                 epochs_wo_improvement = 0
                 best_loss = loss
                 model_name = f'model.{slice_len}.{model_postfix}.pt'
@@ -347,10 +345,12 @@ if __name__ == "__main__":
         plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
         plt.show()
 
-        ds_train.relabel_ctrl_samples()
-        ds_test.relabel_ctrl_samples()
 
-        print(ds_train.info())
+
+
+    ds_train.relabel_ctrl_samples()
+    ds_test.relabel_ctrl_samples()
+    print(ds_train.info())
 
     Nclass = ds_info['nclasses']
     train_config['Nclass'] = Nclass

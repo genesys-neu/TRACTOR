@@ -178,8 +178,8 @@ class PositionalEncoding(nn.Module):
         """
         import matplotlib.pyplot as plt
         np_pe = np.array(pe[0])
-        plt.imshow(np_pe.T, aspect='auto')
-        # plt.colorbar()
+        plt.imshow(np_pe, aspect='auto')
+        plt.colorbar()
         plt.show()
         """
     def forward(self, x):
