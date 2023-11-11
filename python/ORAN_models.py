@@ -61,7 +61,7 @@ class ConvNN(nn.Module):
 
 class TransformerNN(nn.Module):
     def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
-                 dropout: float = 0.2, use_pos: bool = False):
+                 dropout: float = 0.2, use_pos: bool = False, custom_enc: bool = False):
         super(TransformerNN, self).__init__()
 
         if use_pos:
@@ -147,7 +147,7 @@ class TransformerNN_v2(nn.Module):
             src = self.pos_encoder(src).squeeze()
         t_out = self.transformer_encoder(src)
         # get hidden state of the [CLS] token
-        t_out = t_out[: ,0 ,:].squeeze()
+        t_out = t_out[:, 0, :].squeeze()
         pooler = self.pre_classifier(t_out)
         pooler = torch.nn.ReLU()(pooler)
         pooler = self.dropout(pooler)
@@ -157,7 +157,7 @@ class TransformerNN_v2(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 50000):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 50000, custom_enc=False):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         self.max_len = max_len
@@ -182,33 +182,34 @@ class PositionalEncoding(nn.Module):
         plt.colorbar()
         plt.show()
         """
+        self.custom_enc = custom_enc
     def forward(self, x):
         """
         Args:
             x: Tensor, shape [batch_size, seq_len, features]
         """
 
-        #x = x + self.pe[:, :x.size(1)]
+        if not self.custom_enc:
+            x = x + self.pe[:, :x.size(1)]
 
-        rel_time_ix_info = x[:, :, 0]
-        x = x[:, :, 1:]
-        """
-        # alternative method to compute this, but below should be faster
-        all_pe = torch.zeros((x.shape[0], x.shape[1], x.shape[2]))
-        for s in range(x.shape[0]): # iterate over sample in batch
-            s_timeinfo_ix = torch.clip(rel_time_ix_info[s], max=self.max_len-1).to(torch.long)
-            all_pe[s] = self.pe[:, s_timeinfo_ix]
-        """
+        else:
 
+            rel_time_ix_info = x[:, :, 0]
+            x = x[:, :, 1:]
+            """
+            # alternative method to compute this, but below should be faster
+            all_pe = torch.zeros((x.shape[0], x.shape[1], x.shape[2]))
+            for s in range(x.shape[0]): # iterate over sample in batch
+                s_timeinfo_ix = torch.clip(rel_time_ix_info[s], max=self.max_len-1).to(torch.long)
+                all_pe[s] = self.pe[:, s_timeinfo_ix]
+            """
+            all_pe = torch.stack(
+                [self.pe[:, torch.clip(s, max=self.max_len-1).to(torch.long)]
+                    for s in torch.unbind(rel_time_ix_info, dim=0)]
+                , dim=0).squeeze()
 
-        all_pe = torch.stack(
-            [self.pe[:, torch.clip(s, max=self.max_len-1).to(torch.long)]
-                for s in torch.unbind(rel_time_ix_info, dim=0)]
-            , dim=0).squeeze()
-
-        if x.device.type == 'cuda':
-            all_pe = all_pe.to(x.device)
-        x = x + all_pe
+            if x.device.type == 'cuda':
+                all_pe = all_pe.to(x.device)
+            x = x + all_pe
 
         return self.dropout(x)
-

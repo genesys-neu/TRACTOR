@@ -14,7 +14,7 @@ from ray.train.torch import TorchTrainer, TorchPredictor
 from ray.air.config import ScalingConfig
 from ray.air import session, Checkpoint
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
-from ORAN_dataset import load_csv_traces, relative_timestamp
+from ORAN_dataset import load_csv_traces, add_first_dim
 
 from sklearn.metrics import confusion_matrix as conf_mat
 import seaborn as sn
@@ -24,6 +24,7 @@ proj_root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),os.pardir
 import sys
 sys.path.append(proj_root_dir)
 from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
+from vit_pytorch import ViT
 from visualize_inout import plot_trace_class
 
 #ds_train = ORANTracesDataset('train_in__Trial1_Trial2_Trial3.pkl', 'train_lbl__Trial1_Trial2_Trial3.pkl')
@@ -124,18 +125,37 @@ def train_func(config: Dict):
         test_dataloader = train.torch.prepare_data_loader(test_dataloader)
 
     # Create model.
-    if global_model == TransformerNN:
-        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1)
+    if global_model in [TransformerNN, TransformerNN_v2]:
+        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1, custom_enc=True)
+        loss_fn = nn.NLLLoss()
+    elif global_model == ViT:
+        patch_Tsize = 4
+        model = global_model(
+            image_size=(slice_len, num_feats),
+            patch_size=(patch_Tsize,num_feats),
+            num_classes=Nclass,
+            channels=1,
+            dim=128,
+            heads=8,
+            depth=2,
+            mlp_dim=2048,
+            dropout=0.1,
+            emb_dropout=0.1
+            )
+        # this loss fn is different (cause model doesn't have Softmax)
+        loss_fn = nn.CrossEntropyLoss()
+        # let's also add a transform function to add the channel axis for visual transformer in dataset samples
+        ds_train.transform = add_first_dim
+        ds_test.transform = add_first_dim
+
     else:
         model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
+        loss_fn = nn.NLLLoss()
     if useRay:
         model = train.torch.prepare_model(model)
     else:
         model.to(device)
 
-
-
-    loss_fn = nn.NLLLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     from torch.optim.lr_scheduler import ReduceLROnPlateau
     
@@ -278,10 +298,11 @@ if __name__ == "__main__":
     parser.add_argument("--isNorm", default=False, action='store_true', help="Specify to load the normalized dataset." )
     parser.add_argument("--test", default=None, choices=['val', 'traces'], help="Testing the model") # TODO visualize capture and then perform classification after loading model
     parser.add_argument("--relabel_test", action="store_true", default=False, help="Perform ctrl label correction during testing time") 
+    parser.add_argument("--relabel_train", action="store_true", default=False, help="Perform ctrl label correction during training time" )
     parser.add_argument("--cp_path", help='Path to save/load checkpoint and training logs')
     parser.add_argument("--exp_name", default='', help="Name of this experiment")
-    parser.add_argument("--norm_param_path", default="/home/mauro/Research/ORAN/traffic_gen2/logs/cols_maxmin.pkl", help="normalization parameters path.")
-    parser.add_argument("--transformer", default=None, choices=['v1', 'v2'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
+    parser.add_argument("--norm_param_path", default="", help="Normalization parameters path.")
+    parser.add_argument("--transformer", default=None, choices=['v1', 'v2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
     parser.add_argument("--pos_enc",  action="store_true", default=False, help="Use positional encoder (only applied to transformer arch)")
     parser.add_argument("--patience", type=int, default=30, help="Num of epochs to wait before interrupting training with early stopping")
     parser.add_argument("--lrmax", type=float, default=1e-3,help="Initial learning rate ")
@@ -295,12 +316,18 @@ if __name__ == "__main__":
 
     args, _ = parser.parse_known_args()
     if args.transformer is not None:
-        transformer = TransformerNN if args.transformer == 'v1' else TransformerNN_v2
+        if args.transformer == 'v1':
+            transformer = TransformerNN
+        elif args.transformer == 'v2':
+            transformer = TransformerNN_v2
+        else:
+            transformer = ViT
 
-    ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path, relabel_CTRL=False)
-    ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path, relabel_CTRL=False)
+    ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path, norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
+    ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path,  norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
     ds_info = ds_train.info()
 
+    print("--- DS INFO ---")
     print(ds_info)
 
     logdir = os.path.join(args.cp_path, args.exp_name)
@@ -308,50 +335,18 @@ if __name__ == "__main__":
     if not os.path.isdir(logdir):
         os.makedirs(logdir, exist_ok=True)
 
-    ixs_ctrl = ds_train.obs_labels == 3
-    all_ctrl = ds_train.obs_input[ixs_ctrl]
-    include_ixs = [1] + [x for x in range(3,ds_train.obs_input.shape[-1])]    # exclude column 0 (Timestamp) and 2 (IMSI)
-    mean_ctrl_sample = torch.mean(all_ctrl[:, :, include_ixs], dim=0)
-    std_ctrl_sample = torch.std(all_ctrl[:, :, include_ixs], dim=0)
-
+    include_KPI_ixs = [1] + [x for x in range(3, ds_train.obs_input.shape[-1])]    # exclude column 0 (Timestamp) and 2 (IMSI)
     normp = pickle.load(open(os.path.join(args.ds_path, args.norm_param_path), "rb"))
-    [print(i, ':', normp[c]['name']) for i, c in enumerate(include_ixs)]
-    if args.info_verbose:
-        # compute euclidean distance between samples of other classes and mean ctrl sample
-        for cl in [0,1,2,3]:
-            print("Difference of mean class ctrl (4) with class", cl)
-            ixs_this = ds_train.obs_labels == cl
-            all_this = ds_train.obs_input[ixs_this]
-            norm = np.linalg.norm(all_this[:, :, include_ixs] - mean_ctrl_sample, axis=(1, 2))
-            print("Mean norm", np.mean(norm), "Std.", np.std(norm))
-            x_axis = np.arange(0, 15, 0.01)
-            plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class '+str(cl))
-        plt.legend()
-        plt.show()
 
-        plt.imshow(mean_ctrl_sample)
-        plt.colorbar()
-        plt.show()
-        plt.imshow(std_ctrl_sample)
-        plt.colorbar()
-        plt.show()
+    [print(i, ':', normp[c]['name']) for i, c in enumerate(include_KPI_ixs) if 'name' in normp[c].keys()]
 
-        # show a barplot representing the amount of samples that should be relabeled
-        obs_excludecols = ds_train.obs_input[:, :, include_ixs]
-        norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
-        possible_ctrl_ixs = norm < 2.
-        possible_ctrl_labels = ds_train.obs_labels[possible_ctrl_ixs].numpy()
-        unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
-        plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
-        plt.show()
-
-
-
-
-    ds_train.relabel_ctrl_samples()
-    ds_test.relabel_ctrl_samples()
-    print(ds_train.info())
-
+    """
+    if args.relabel_train:
+        ds_train.relabel_ctrl_samples()
+        ds_test.relabel_ctrl_samples()
+        print("--- DS INFO (after relabeling) ---")
+        print(ds_train.info())
+    """
     Nclass = ds_info['nclasses']
     train_config['Nclass'] = Nclass
     train_config['useRay'] = args.useRay
@@ -446,7 +441,7 @@ if __name__ == "__main__":
             y_true = []
             y_output = []
             with torch.no_grad():
-                for trial_ix, dtrace in enumerate(traces):  # TODO verify this is doing the right thing
+                for trial_ix, dtrace in enumerate(traces):
                     print('------------ Trial', trial_ix + 1, '------------')
                     trial_y_true = []
                     trial_y_output = []

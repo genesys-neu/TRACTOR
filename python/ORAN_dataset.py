@@ -9,6 +9,7 @@ from tqdm import tqdm
 import pickle
 import argparse
 from glob import glob
+from scipy.stats import norm as normal
 import sys
 
 def load_csv_traces(trials, data_path, data_type="singleUE_clean", norm_params=None, isRaw=False):
@@ -41,6 +42,7 @@ def load_csv_traces(trials, data_path, data_type="singleUE_clean", norm_params=N
                 trials_traces.append({'embb': embb_traces, 'mmtc': mmtc_traces, 'urll': urll_traces})
 
         elif data_type == "multiUE":
+            # TODO finish coding this part (needed at test time)
             ds_tree = load_csv_dataset__multi(data_path, trial, isControlClass)
             for multi_conf in ds_tree.keys():
                 for u in ds_tree[multi_conf].keys():
@@ -96,10 +98,6 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
             else:
                 datasets = [embb_logs, mmtc_logs, urll_logs]
 
-            # assuming all the files have same headers..
-            if cols_names is None:
-                cols_names = embb_logs[0].columns.values
-
             embb_traces = []
             embb_labels = []
             mmtc_traces = []
@@ -119,7 +117,10 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
                     else:
                         columns_drop = drop_colnames
                     trace.drop(columns_drop, axis=1, inplace=True)
-
+                    # assuming all the files have same headers and same columns are droppped
+                    if cols_names is None:
+                        cols_names = trace.columns.values
+                    # slicing
                     new_trace = slice_dataset(trace, slice_len)
 
                     print("Generating ORAN traffic KPI dataset")
@@ -195,13 +196,16 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
                     print("Generating slices: ", multi_conf, u)
                     # process each user trace individually
                     ds = ds_tree[multi_conf][u]['kpis']
-                    if cols_names is None:
-                        cols_names = ds.columns.values
-                    # slicing
                     columns_drop = drop_colnames
                     if len(columns_drop) > 0:
                         ds.drop(columns_drop, axis=1, inplace=True)
+                    # obtain column names after drop
+                    # (assuming all the files have same columns and same columns dropped)
+                    if cols_names is None:
+                        cols_names = ds.columns.values
+                    # slicing
                     new_trace = slice_dataset(ds, slice_len)
+
 
                     lbl = ds_tree[multi_conf][u]["label"]
                     if lbl == "embb" or lbl == "mmtc" or lbl == "urll":
@@ -234,21 +238,10 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
     trials_in = np.concatenate(trials_in, axis=0).astype(np.float32)
     trials_lbl = np.concatenate(trials_lbl, axis=0).astype(int)
 
-    # also create a normalized version of the features (each feature is normalized independently)
-    trials_in_norm = trials_in.copy()
+    #columns_maxmin, trials_in_norm = normalize_KPIs(cols_names, trials_in)
 
-    columns_maxmin = {}
-    for c in range(trials_in_norm.shape[2]):
-        if cols_names[c] != 'Timestamp':
-            col_max = trials_in_norm[:, :, c].max()
-            col_min = trials_in_norm[:, :, c].min()
-            if not (col_max == col_min):
-                print('Normalizing Col.', cols_names[c], '[', c, '] -- Max', col_max, ', Min', col_min)
-                trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
-            else:
-                trials_in_norm[:, :, c] = 0
-            # store max/min values for later normalization
-            columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
+    columns_maxmin = extract_max_min_values(cols_names, trials_in)
+    trials_in_norm = normalize_KPIs(columns_maxmin, trials_in)
 
     # generate (shuffled) train and test data
     samp_ixs = list(range(trials_in.shape[0]))
@@ -288,9 +281,52 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
             },
             'labels': torch.Tensor(trials_lbl[n_train:n_train+n_valid]).type(torch.LongTensor)
         }
+
     }
 
     return trials_ds, columns_maxmin
+
+"""
+def normalize_KPIs(cols_names, trials_in):
+    # create a normalized version of the features (each feature is normalized independently)
+    trials_in_norm = trials_in.copy()
+    columns_maxmin = {}
+    for c in range(trials_in_norm.shape[2]):
+        if cols_names[c] != 'Timestamp':
+            col_max = trials_in_norm[:, :, c].max()
+            col_min = trials_in_norm[:, :, c].min()
+            if not (col_max == col_min):
+                print('Normalizing Col.', cols_names[c], '[', c, '] -- Max', col_max, ', Min', col_min)
+                trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
+            else:
+                trials_in_norm[:, :, c] = 0 # set all data as zero (we don't need this info cause it never changes)
+            # store max/min values for later normalization
+            columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
+    return columns_maxmin, trials_in_norm
+"""
+
+def extract_max_min_values(cols_names, trials_in):
+    columns_maxmin = {}
+    for c in range(trials_in.shape[2]):
+        if cols_names[c] != 'Timestamp':
+            col_max = trials_in[:, :, c].max()
+            col_min = trials_in[:, :, c].min()
+            columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
+    return columns_maxmin
+
+def normalize_KPIs(columns_maxmin, trials_in):
+    trials_in_norm = trials_in.copy()
+    for c, max_min_info in columns_maxmin.items():
+        if isinstance(c, int):
+            col_max = max_min_info['max']
+            col_min = max_min_info['min']
+            if not (col_max == col_min):
+                print('Normalizing Col.', max_min_info['name'], '[', c, '] -- Max', col_max, ', Min', col_min)
+                trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
+            else:
+                trials_in_norm[:, :, c] = 0  # set all data as zero (we don't need this info cause it never changes)
+    return trials_in_norm
+
 
 
 def slice_dataset(ds, slice_len):
@@ -387,11 +423,27 @@ def relative_timestamp(x):
     x[:, 0] -=  first_ts
     return x
 
+def add_first_dim(x):
+    return x[None]
+
 class ORANTracesDataset(Dataset):
-    def __init__(self, dataset_pkls, key, normalize=True, path='../logs/', sanitize=True, relabel_CTRL=False, relabel_norm_threshold=2., transform=None, target_transform=None):
+    def __init__(self, dataset_pkls, key, normalize=True, path='../logs/', norm_par_path="", sanitize=True, relabel_CTRL=False, relabel_norm_threshold=2.5, transform=None, target_transform=None):
         self.obs_input, self.obs_labels = None, None
+        self.path = path
+        self.norm_params = None
+
+        if norm_par_path != "":
+            self.norm_params = pickle.load(open(norm_par_path, 'rb'))
+
         for p in dataset_pkls:
-            dataset = pickle.load(open(os.path.join(path, p), 'rb'))
+            dataset = pickle.load(open(os.path.join(self.path, p), 'rb'))
+            # let's retrieve the relative normalization parameters for this specific dataset
+            # ds_filename = os.path.basename(p)
+            # ds_dir = os.path.dirname(p)
+            # trials_str, filemarker = ds_filename.split('__')[2:]
+            # normp_filename = "cols_maxmin__" + trials_str + "__" + filemarker
+            # norm_params = pickle.load(open(os.path.join(self.path, ds_dir, normp_filename), 'rb'))
+
             if normalize:
                 norm_key = 'norm'
             else:
@@ -402,8 +454,18 @@ class ORANTracesDataset(Dataset):
                 self.obs_input = torch.cat((self.obs_input, dataset[key]['samples'][norm_key]), dim=0)
                 self.obs_labels = torch.cat((self.obs_labels, dataset[key]['labels']), dim=0)
 
-        # sanitize columns: remove columns with no variation of data
+        # if needed, relabel the CTRL samples based on computation on the
+        # normalization parameters (or just compute it from the dataset)
+        self.ctrl_label = 3
+        self.relabel_norm_threshold = relabel_norm_threshold
+        self.relabeled = False
+        if relabel_CTRL:
+            self.relabel_ctrl_samples()
+
+        # sanitize columns: remove columns with no variation of data (after relabeling)
         if sanitize:
+            # TODO if normp is passed use that info to remove columns, otherwise go on with this
+
             obs_std = np.std(self.obs_input.numpy(), axis=(0, 1))
             features_to_remove = np.where(obs_std == 0)[0]
             all_feats = torch.arange(0,self.obs_input.shape[-1])
@@ -412,22 +474,28 @@ class ORANTracesDataset(Dataset):
 
         self.sanitized = sanitize
 
-        self.ctrl_label = 3
-        self.relabel_norm_threshold = relabel_norm_threshold
-        self.relabeled = False
-        if relabel_CTRL:
-            self.relabel_ctrl_samples()
-
         self.transform = transform
         self.target_transform = target_transform
 
     def relabel_ctrl_samples(self):
-        ixs_ctrl = self.obs_labels == self.ctrl_label
-        all_ctrl = self.obs_input[ixs_ctrl]
-        include_ixs = [1] + [x for x in range(3, self.obs_input.shape[-1])]  # exclude column 0 (Timestamp) and 2 (IMSI)
-        mean_ctrl_sample = torch.mean(all_ctrl[:, :, include_ixs], dim=0)
+        #ixs_ctrl = self.obs_labels == self.ctrl_label
+
+        assert not(self.norm_params is None) , "Relabeling needs normalization parameters to be passed."
+        assert 'info' in self.norm_params.keys(), "Normalization parameters need an 'info' field"
+        assert 'mean_ctrl_sample' in self.norm_params['info'].keys(), "Normalization parameters need to have the mean_ctrl_sample pre-computed"
+
+        # exclude column 0 (Timestamp) and 2 (IMSI)
+        include_ixs = set(range(self.obs_input.shape[-1]))
+        remove_cols = ['Timestamp', 'IMSI']
+        for k, v in self.norm_params.items():
+            if isinstance(k, int) and v['name'] in remove_cols:
+                include_ixs.remove(k)
+
+        mean_ctrl_sample = self.norm_params['info']['mean_ctrl_sample']
+
+
         # compute euclidean distance between samples of other classes and mean ctrl sample
-        obs_excludecols = self.obs_input[:, :, include_ixs]
+        obs_excludecols = self.obs_input[:, :, list(include_ixs)]
         norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
         # here we get the indexes for all samples that have a norm (i.e. euclidean distance) less than a given
         # threshold, which should correspond to CTRL (i.e. silent) traffic portions. Note that the lower the threshold,
@@ -435,9 +503,16 @@ class ORANTracesDataset(Dataset):
         # distances computed between the mean CTRL sample (assuming they look very similar)
         # and every samples of every other class
         possible_ctrl_ixs = norm < self.relabel_norm_threshold
+        possible_ctrl_labels = self.obs_labels[possible_ctrl_ixs]
+        unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
+        print("Num of relabel per class:", unique_counts)
+        #plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
+        #plt.show()
         for ix, isPossibleCTRL in enumerate(possible_ctrl_ixs):
             if isPossibleCTRL and self.obs_labels[ix] != self.ctrl_label:
+                #print(ix, self.obs_labels[ix], '-> 3')
                 self.obs_labels[ix] = self.ctrl_label
+
         #possible_ctrl_labels = self.obs_labels[possible_ctrl_ixs].numpy()
 
         self.relabeled = True
@@ -470,6 +545,16 @@ class ORANTracesDataset(Dataset):
             label = self.target_transform(label)
         return obs, label
 
+def safe_pickle_dump(filepath, myobj):
+    yes_choice = ['yes', 'y']
+    to_save = True
+    if os.path.isfile(filepath):
+        user_input = input("File " + filepath + " exists already. Overwrite? [y/n]")
+        if not (user_input.lower() in yes_choice):
+            to_save = False
+    if to_save:
+        pickle.dump(myobj, open(filepath, 'wb'))
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -493,6 +578,10 @@ if __name__ == "__main__":
     path = args.ds_path
     trials = args.trials
     trials_multi = args.trials_multi
+    ctrl_class = 3
+
+    datasets = []
+    """
     for data_type in args.data_type:
         trials = trials_multi if "multi" in data_type else trials
         dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path,
@@ -509,16 +598,159 @@ if __name__ == "__main__":
         file_suffix += '_'+args.filemarker if args.filemarker else ''
         zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
         pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
-        pickle.dump(dataset, open(os.path.join(pickle_ds_path, 'dataset__' + args.mode + '__' +file_suffix + zeros_suffix + '.pkl'), 'wb'))
 
+        dataset_path = os.path.join(pickle_ds_path, 'dataset__' + args.mode + '__' +file_suffix + zeros_suffix + '.pkl')
+        safe_pickle_dump(dataset_path, dataset)
         # save separately maxmin normalization parameters for each column/feature
         norm_param_path = os.path.join(pickle_ds_path,'cols_maxmin__'+file_suffix+'.pkl')
-        yes_choice = ['yes', 'y']
-        save_norm_param = True
-        if os.path.isfile(norm_param_path):
-            user_input = input("File "+norm_param_path+" exists already. Overwrite? [y/n]")
-            if not(user_input.lower() in yes_choice):
-                save_norm_param = False
+        safe_pickle_dump(norm_param_path, cols_maxmin)
 
-        if save_norm_param:
-            pickle.dump(cols_maxmin, open(norm_param_path, 'wb'))
+        datasets.append( (dataset, cols_maxmin, dataset_path, norm_param_path) )
+    """
+    # DEBUG: in case you have already generated the datasets and want just load it instead of recompute normalization
+    # parameters, comment the for loop above and uncomment the one below
+
+
+    for data_type in args.data_type:
+        trials = trials_multi if "multi" in data_type else trials
+
+        file_suffix = ''
+        for t in trials:
+            file_suffix += t
+            if t != trials[-1]:
+                file_suffix += '_'
+
+        file_suffix += '__slice' + str(args.slicelen) + '_' + data_type
+        file_suffix += '_' + args.filemarker if args.filemarker else ''
+        zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
+        pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
+
+        dataset_path = os.path.join(pickle_ds_path,
+                                    'dataset__' + args.mode + '__' + file_suffix + zeros_suffix + '.pkl')
+        dataset = pickle.load(open(dataset_path, "rb"))
+        # save separately maxmin normalization parameters for each column/feature
+        norm_param_path = os.path.join(pickle_ds_path, 'cols_maxmin__' + file_suffix + '.pkl')
+        cols_maxmin = pickle.load(open(norm_param_path, "rb"))
+
+        datasets.append((dataset, cols_maxmin, dataset_path, norm_param_path))
+
+
+    # if multiple data types (i.e. singleUE, multiUE) have been processed,
+    # let's define a common set of normalization/sanitization parameters
+    if len(args.data_type) > 1:
+
+        # first, let's find a common set of columns to keep (i.e. the ones that have varying values)
+        # and their common min max parameters for normalization
+        common_normp = {}
+        novar_keys = []
+        common_keys = set()
+        [common_keys.update(set(list(kpi_p.keys()))) for _, kpi_p, _, _ in datasets]
+
+        for k in common_keys:   # for each common key/kpi feature
+            # verify that the name for the same key is the same
+            first_ds_kpiname = datasets[0][1][k]['name']
+            assert all([kpi_p[k]['name'] == first_ds_kpiname for _, kpi_p, _, _ in datasets]), 'check that kpis and names have the same order'
+            # obtain the overall max/min values
+            common_normp[k] = {
+                'name': first_ds_kpiname,
+                'max': max([kpi_p[k]['max'] for _, kpi_p, _, _ in datasets]),     # get max of maxes in that specific key/feature
+                'min': min([kpi_p[k]['min'] for _, kpi_p, _, _ in datasets])      # get min of mins in that specific key/feature
+            }
+            # annotate the features indexes that needs to be dropped when re-normalizing and sanitizing the data
+            if common_normp[k]['max'] == common_normp[k]['min']:
+                novar_keys.append(k)
+
+        common_normp['info'] = {'exclude_cols_ix': novar_keys}
+        global_norm_path = os.path.join(path, 'global__cols_maxmin.pkl')
+
+        # then let's create an alternative version of the datasets normalized with global paramters and save it in a separate file
+        for ds, kpi_p, ds_path, kpi_p_path in datasets:
+            trials_train_globalminmax = normalize_KPIs(common_normp, ds['train']['samples']['no_norm'].numpy())
+            ds['train']['samples']['norm'] = torch.Tensor(trials_train_globalminmax)
+            trials_valid_globalminmax = normalize_KPIs(common_normp, ds['valid']['samples']['no_norm'].numpy())
+            ds['valid']['samples']['norm'] = torch.Tensor(trials_valid_globalminmax)
+            ds['info'] = {'global_norm_path': global_norm_path}
+            safe_pickle_dump(os.path.splitext(ds_path)[0] + "__globalnorm.pkl", ds)
+
+        # second, let's compute an average CTRL traffic template to be used across multiple datasets
+        # IMPORTANT: we have to use also the validation set for this and after the new normalization
+        all_ctrl = None
+        for ds, kpi_p, ds_path, kpi_p_path in datasets:
+            for t in ['train', 'valid']:
+                ixs_ctrl = ds[t]['labels'] == ctrl_class
+                if torch.any(ixs_ctrl):
+                    if all_ctrl is None:
+                        all_ctrl = ds[t]['samples']['norm'][ixs_ctrl]
+                    else:
+                        all_ctrl = torch.cat((all_ctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+
+        # exclude column 0 (Timestamp) and 2 (IMSI)
+        include_ixs = set(range(datasets[0][0]['train']['samples']['norm'].shape[-1]))
+        remove_cols = ['Timestamp', 'IMSI']
+        for k, v in common_normp.items():
+            if isinstance(k, int) and v['name'] in remove_cols:
+                include_ixs.remove(k)
+
+        if (not (all_ctrl is None)) and (all_ctrl.shape[0] > 0):
+            mean_ctrl_sample = torch.mean(all_ctrl[:, :, list(include_ixs)], dim=0)
+            std_ctrl_sample = torch.std(all_ctrl[:, :, list(include_ixs)], dim=0)
+
+            common_normp['info']['mean_ctrl_sample'] = mean_ctrl_sample
+            common_normp['info']['std_ctrl_sample'] = std_ctrl_sample
+
+            # TODO integrate this code here and remove it from torch_train_ORAN.py
+
+            import matplotlib.pyplot as plt
+            # compute euclidean distance between samples of other classes and mean ctrl sample
+
+            for cl in [0, 1, 2, 3]:
+                print("Difference of mean class ctrl (4) with class", cl)
+
+                all_sample = None
+                for ds, kpi_p, ds_path, kpi_p_path in datasets:
+                    for t in ['train', 'valid']:
+                        ixs_ctrl = ds[t]['labels'] == cl
+                        if torch.any(ixs_ctrl):
+                            if all_sample is None:
+                                all_sample = ds[t]['samples']['norm'][ixs_ctrl]
+                            else:
+                                all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+
+
+                norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2)) # TODO check dimensions
+                print("Mean norm", np.mean(norm), "Std.", np.std(norm))
+                x_axis = np.arange(0, 15, 0.01)
+                plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class ' + str(cl))
+            plt.legend()
+            plt.show()
+    
+            plt.imshow(mean_ctrl_sample)
+            plt.colorbar()
+            plt.show()
+            #plt.imshow(std_ctrl_sample)
+            #plt.colorbar()
+            #plt.show()
+
+            all_sample_noctrl = None
+            all_labels_noctrl = None
+            for ds, kpi_p, ds_path, kpi_p_path in datasets:
+                for t in ['train', 'valid']:
+                    ixs_ctrl = ds[t]['labels'] != ctrl_class
+                    if torch.any(ixs_ctrl):
+                        if all_sample_noctrl is None and all_labels_noctrl is None:
+                            all_sample_noctrl = ds[t]['samples']['norm'][ixs_ctrl]
+                            all_labels_noctrl = ds[t]['labels'][ixs_ctrl]
+                        else:
+                            all_sample_noctrl = torch.cat((all_sample_noctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+                            all_labels_noctrl = torch.cat((all_labels_noctrl, ds[t]['labels'][ixs_ctrl]), dim=0)
+            # show a barplot representing the amount of samples that should be relabeled
+            obs_excludecols = all_sample_noctrl[:, :, list(include_ixs)]
+            norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
+            possible_ctrl_ixs = norm < 2.5
+            possible_ctrl_labels = all_labels_noctrl[possible_ctrl_ixs].numpy()
+            unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
+            plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
+            plt.show()
+
+        # lastly, let's save the new global parameters
+        safe_pickle_dump(global_norm_path, common_normp)
