@@ -308,23 +308,26 @@ def normalize_KPIs(cols_names, trials_in):
 def extract_max_min_values(cols_names, trials_in):
     columns_maxmin = {}
     for c in range(trials_in.shape[2]):
-        if cols_names[c] != 'Timestamp':
-            col_max = trials_in[:, :, c].max()
-            col_min = trials_in[:, :, c].min()
-            columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
+        col_max = trials_in[:, :, c].max()
+        col_min = trials_in[:, :, c].min()
+        columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
     return columns_maxmin
 
 def normalize_KPIs(columns_maxmin, trials_in):
     trials_in_norm = trials_in.copy()
     for c, max_min_info in columns_maxmin.items():
         if isinstance(c, int):
-            col_max = max_min_info['max']
-            col_min = max_min_info['min']
-            if not (col_max == col_min):
-                print('Normalizing Col.', max_min_info['name'], '[', c, '] -- Max', col_max, ', Min', col_min)
-                trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
+            if max_min_info['name'] != 'Timestamp':
+                col_max = max_min_info['max']
+                col_min = max_min_info['min']
+                if not (col_max == col_min):
+                    print('Normalizing Col.', max_min_info['name'], '[', c, '] -- Max', col_max, ', Min', col_min)
+                    trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
+                else:
+                    trials_in_norm[:, :, c] = 0  # set all data as zero (we don't need this info cause it never changes)
             else:
-                trials_in_norm[:, :, c] = 0  # set all data as zero (we don't need this info cause it never changes)
+                print('Skipping normalization of Col. ', max_min_info['name'])
+
     return trials_in_norm
 
 
@@ -464,8 +467,6 @@ class ORANTracesDataset(Dataset):
 
         # sanitize columns: remove columns with no variation of data (after relabeling)
         if sanitize:
-            # TODO if normp is passed use that info to remove columns, otherwise go on with this
-
             obs_std = np.std(self.obs_input.numpy(), axis=(0, 1))
             features_to_remove = np.where(obs_std == 0)[0]
             all_feats = torch.arange(0,self.obs_input.shape[-1])
@@ -571,6 +572,7 @@ if __name__ == "__main__":
                              '3) "co" is specific to CTRL traffic and will generate a separate class for every other type of traffic.')
     parser.add_argument("--data_type", default="singleUE_clean", nargs='+', choices=data_type_choice, help="This argument specifies the type of KPI traces to read into the dataset.")
     parser.add_argument("--drop_colnames", default=[], nargs='*', help="Remove specified column names from data frame when loaded from .csv files.s")
+    parser.add_argument("--already_gen", action='store_true', default=False, help="[DEBUG] Use this flag for pre-generated dataset(s) that are only needed to compute new statistics.")
     args, _ = parser.parse_known_args()
 
     from visualize_inout import classmap
@@ -581,58 +583,60 @@ if __name__ == "__main__":
     ctrl_class = 3
 
     datasets = []
-    """
-    for data_type in args.data_type:
-        trials = trials_multi if "multi" in data_type else trials
-        dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path,
-                                                 mode=args.mode, data_type=data_type, check_zeros=args.check_zeros,
-                                                 drop_colnames=args.drop_colnames)
 
-        file_suffix = ''
-        for t in trials:
-            file_suffix += t
-            if t != trials[-1]:
-                file_suffix += '_'
+    if not args.already_gen:
+        for data_type in args.data_type:
+            trials = trials_multi if "multi" in data_type else trials
+            dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path,
+                                                     mode=args.mode, data_type=data_type, check_zeros=args.check_zeros,
+                                                     drop_colnames=args.drop_colnames)
 
-        file_suffix += '__slice' + str(args.slicelen) +'_' + data_type
-        file_suffix += '_'+args.filemarker if args.filemarker else ''
-        zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
-        pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
+            file_suffix = ''
+            for t in trials:
+                file_suffix += t
+                if t != trials[-1]:
+                    file_suffix += '_'
 
-        dataset_path = os.path.join(pickle_ds_path, 'dataset__' + args.mode + '__' +file_suffix + zeros_suffix + '.pkl')
-        safe_pickle_dump(dataset_path, dataset)
-        # save separately maxmin normalization parameters for each column/feature
-        norm_param_path = os.path.join(pickle_ds_path,'cols_maxmin__'+file_suffix+'.pkl')
-        safe_pickle_dump(norm_param_path, cols_maxmin)
+            file_suffix += '__slice' + str(args.slicelen) +'_' + data_type
+            file_suffix += '_'+args.filemarker if args.filemarker else ''
+            zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
+            pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
 
-        datasets.append( (dataset, cols_maxmin, dataset_path, norm_param_path) )
-    """
-    # DEBUG: in case you have already generated the datasets and want just load it instead of recompute normalization
-    # parameters, comment the for loop above and uncomment the one below
+            dataset_path = os.path.join(pickle_ds_path, 'dataset__' + args.mode + '__' +file_suffix + zeros_suffix + '.pkl')
+            safe_pickle_dump(dataset_path, dataset)
+            # save separately maxmin normalization parameters for each column/feature
+            norm_param_path = os.path.join(pickle_ds_path,'cols_maxmin__'+file_suffix+'.pkl')
+            safe_pickle_dump(norm_param_path, cols_maxmin)
+
+            datasets.append( (dataset, cols_maxmin, dataset_path, norm_param_path) )
+
+    else:
+        # DEBUG: in case you have already generated the datasets and
+        # want just load it instead of recompute normalization parameters
 
 
-    for data_type in args.data_type:
-        trials = trials_multi if "multi" in data_type else trials
+        for data_type in args.data_type:
+            trials = trials_multi if "multi" in data_type else trials
 
-        file_suffix = ''
-        for t in trials:
-            file_suffix += t
-            if t != trials[-1]:
-                file_suffix += '_'
+            file_suffix = ''
+            for t in trials:
+                file_suffix += t
+                if t != trials[-1]:
+                    file_suffix += '_'
 
-        file_suffix += '__slice' + str(args.slicelen) + '_' + data_type
-        file_suffix += '_' + args.filemarker if args.filemarker else ''
-        zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
-        pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
+            file_suffix += '__slice' + str(args.slicelen) + '_' + data_type
+            file_suffix += '_' + args.filemarker if args.filemarker else ''
+            zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
+            pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
 
-        dataset_path = os.path.join(pickle_ds_path,
-                                    'dataset__' + args.mode + '__' + file_suffix + zeros_suffix + '.pkl')
-        dataset = pickle.load(open(dataset_path, "rb"))
-        # save separately maxmin normalization parameters for each column/feature
-        norm_param_path = os.path.join(pickle_ds_path, 'cols_maxmin__' + file_suffix + '.pkl')
-        cols_maxmin = pickle.load(open(norm_param_path, "rb"))
+            dataset_path = os.path.join(pickle_ds_path,
+                                        'dataset__' + args.mode + '__' + file_suffix + zeros_suffix + '.pkl')
+            dataset = pickle.load(open(dataset_path, "rb"))
+            # save separately maxmin normalization parameters for each column/feature
+            norm_param_path = os.path.join(pickle_ds_path, 'cols_maxmin__' + file_suffix + '.pkl')
+            cols_maxmin = pickle.load(open(norm_param_path, "rb"))
 
-        datasets.append((dataset, cols_maxmin, dataset_path, norm_param_path))
+            datasets.append((dataset, cols_maxmin, dataset_path, norm_param_path))
 
 
     # if multiple data types (i.e. singleUE, multiUE) have been processed,
@@ -661,7 +665,8 @@ if __name__ == "__main__":
                 novar_keys.append(k)
 
         common_normp['info'] = {'exclude_cols_ix': novar_keys}
-        global_norm_path = os.path.join(path, 'global__cols_maxmin.pkl')
+        filemarker = '__' + args.filemarker if args.filemarker else ''
+        global_norm_path = os.path.join(path, 'global__cols_maxmin'+filemarker+'.pkl')
 
         # then let's create an alternative version of the datasets normalized with global paramters and save it in a separate file
         for ds, kpi_p, ds_path, kpi_p_path in datasets:
@@ -688,7 +693,7 @@ if __name__ == "__main__":
         include_ixs = set(range(datasets[0][0]['train']['samples']['norm'].shape[-1]))
         remove_cols = ['Timestamp', 'IMSI']
         for k, v in common_normp.items():
-            if isinstance(k, int) and v['name'] in remove_cols:
+            if isinstance(k, int) and (v['name'] in remove_cols):
                 include_ixs.remove(k)
 
         if (not (all_ctrl is None)) and (all_ctrl.shape[0] > 0):

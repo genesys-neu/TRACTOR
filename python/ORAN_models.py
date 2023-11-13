@@ -71,7 +71,8 @@ class TransformerNN(nn.Module):
         # create the positional encoder
         self.use_positional_enc = use_pos
 
-        self.pos_encoder = PositionalEncoding(num_feats + 1, dropout) if use_pos else None
+        # TODO not entirely sure why we need d_model = num_feats + 1 for tradtional pos. encoder
+        self.pos_encoder = PositionalEncoding(num_feats + 1, dropout, custom_enc=custom_enc) if use_pos else None
         # define the encoder layers
 
         encoder_layers = TransformerEncoderLayer(d_model=num_feats, nhead=nhead, batch_first=True)
@@ -161,28 +162,33 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         self.max_len = max_len
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        # ToDo: try the following change
-        # pe = torch.zeros(max_len, 1, d_model)
-        # pe[:, 0, 0::2] = torch.sin(position * div_term)
-        # pe[:, 0, 1::2] = torch.cos(position * div_term)
-        # try the following instead
-        pe = torch.zeros(max_len, d_model)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe[:, :-1]
-        pe = pe.unsqueeze(0)
-
-        self.register_buffer('pe', pe)
-        """
-        import matplotlib.pyplot as plt
-        np_pe = np.array(pe[0])
-        plt.imshow(np_pe, aspect='auto')
-        plt.colorbar()
-        plt.show()
-        """
         self.custom_enc = custom_enc
+
+        if not self.custom_enc:
+            position = torch.arange(max_len).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+            # ToDo: try the following change
+            # pe = torch.zeros(max_len, 1, d_model)
+            # pe[:, 0, 0::2] = torch.sin(position * div_term)
+            # pe[:, 0, 1::2] = torch.cos(position * div_term)
+            # try the following instead
+            pe = torch.zeros(max_len, d_model)
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            pe = pe[:, :-1]
+            pe = pe.unsqueeze(0)
+
+            self.register_buffer('pe', pe)
+            """
+            import matplotlib.pyplot as plt
+            np_pe = np.array(pe[0])
+            plt.imshow(np_pe, aspect='auto')
+            plt.colorbar()
+            plt.show()
+            """
+        else:
+            self.pe = nn.Parameter(torch.randn(1, max_len, d_model-1))
+
     def forward(self, x):
         """
         Args:
