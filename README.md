@@ -79,7 +79,7 @@ python traffic_gen.py -f <playback file name>
 to start the predefined packet communication between gNB and UE on Colosseum.
 
 ### Generate random traffic from UE to the gNB
-To generate _random_ traffic, on UE node run:
+To saturate the RF link with random traffic, on UE node run:
 ```
 iperf3 -c 172.16.0.1 -p 5204 -t <num seconds>
 ```
