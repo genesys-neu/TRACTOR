@@ -9,12 +9,15 @@ if [ ! -d "./interference" ]
     mkdir ./interference/on
 fi
 
-sshpass -p "scope" ssh $1 "colosseumcli rf start 1017 -c"
+# update the rf scenario number as needed (10042 supports up to 10 UEs)
+# see https://colosseumneu.freshdesk.com/support/solutions/articles/61000295793-cellular-scenarios
+sshpass -p "scope" ssh $1 "colosseumcli rf start 10042 -c"
+
 
 sshpass -p "scope" scp radio_tgen.conf $1:/root/radio_api/
 sshpass -p "scope" scp radio_tgen.conf $2:/root/radio_api/
-sshpass -p "scope" scp ./traffic_gen.py $1:/root/traffic_gen/
-sshpass -p "scope" scp ./traffic_gen.py $2:/root/traffic_gen/
+sshpass -p "scope" scp ../traffic_gen.py $1:/root/traffic_gen/
+sshpass -p "scope" scp ../traffic_gen.py $2:/root/traffic_gen/
     
 sshpass -p "scope" ssh $1 "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
 sshpass -p "scope" rsync -av ../raw $1:/root/traffic_gen/
