@@ -62,7 +62,13 @@ cd /home/sample-xapp/
 and wait until the app init is complete.
 
 ### Replay 5G traffic traces
-To re-play the traffic traces in `raw` (`.csv` format) directory on colosseum, after everything else is instantiated you can first run on gNB
+To automatically run traffic generation, you can use :
+```
+run_traffic_gNB_UE.sh genesys-gNB genesys-UE genesys-RIC
+```
+There are additional traffic generation utilities in the /utils directory.
+
+To *manually re-play* traffic traces found in the /raw directory, after everything else is instantiated you can first run on gNB
 ```
 python traffic_gen.py -f <playback file name> --eNB 
 ```
