@@ -49,7 +49,7 @@ sh transfer2Colosseum.sh genesys-<gNB #node> genesys-<UE #node> genesys-<RIC #no
 ```
 ### Start gNB and RIC containers
 Once the nodes have been initialized, you can connect to each of them and run the following commands (in this order):
-- On gNB
+- On gNB (*NOTE: This only needs to be done if run_odu.sh is not already running from previous steps.*)
 ```
 cd /root/radio_code/colosseum-scope-e2 && ./run_odu.sh
 ```
