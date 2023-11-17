@@ -17,6 +17,7 @@ mkdir $out_dir
 read -r gnb < $1
 echo "gnb is: $gnb"
 sshpass -p "scope" ssh $gnb 'colosseumcli rf start 10042 -c'
+sshpass -p "scope" ssh $gnb "rm /root/radio_code/scope_config/metrics/csv/101*_metrics.csv"
 
 while IFS= read -r line; do
     echo "Configuring SRN: $line"
@@ -24,6 +25,7 @@ while IFS= read -r line; do
     sshpass -p "scope" scp ../traffic_gen.py $line:/root/traffic_gen/
     sshpass -p "scope" ssh $line "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
     sshpass -p "scope" rsync -av ../raw $line:/root/traffic_gen/
+
     sleep 3
 done < $1
 
