@@ -12,13 +12,14 @@ from glob import glob
 from scipy.stats import norm as normal
 import sys
 
-def load_csv_traces(trials, data_path, data_type="singleUE_clean", norm_params=None, isRaw=False):
+def load_csv_traces(trials, data_path, data_type="singleUE_clean", norm_params=None):
     mode = 'emuc'
     isControlClass = True if 'c' in mode else False
     trials_traces = []
     for trial in trials:
         print('Generating dataset ', trial)
         if data_type == "singleUE_clean":
+            isRaw = False
             ctrl_traces, embb_traces, mmtc_traces, urll_traces = load_csv_dataset__single(data_path, trial, isControlClass, isRaw)
             # stack together all data from all traffic class
             if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
@@ -90,140 +91,46 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
         print('Generating dataset ', trial)
 
         if data_type == "singleUE_clean" or data_type == "singleUE_raw":
-            isRaw = "_raw" in data_type
-            ctrl_logs, embb_logs, mmtc_logs, urll_logs = load_csv_dataset__single(data_path, trial, isControlClass, isRaw)
-            # stack together all data from all traffic class
-            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
-                datasets = [embb_logs, mmtc_logs, urll_logs, ctrl_logs]
-            else:
-                datasets = [embb_logs, mmtc_logs, urll_logs]
+            trial_samples, cols_n = get_trace_singleUE(data_path,
+                                                       data_type,
+                                                       drop_colnames,
+                                                       isControlClass,
+                                                       mode,
+                                                       slice_len,
+                                                       trial)
 
-            embb_traces = []
-            embb_labels = []
-            mmtc_traces = []
-            mmtc_labels = []
-            urll_traces = []
-            urll_labels = []
-            ctrl_traces = []
-            ctrl_labels = []
-
-            for ix, ds in enumerate(datasets):
-
-                for trace in ds:    # analyze each trace for each traffic type
-
-                    # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
-                    if not isRaw:
-                        columns_drop = ['Timestamp', 'tx_errors downlink (%)'] # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
-                    else:
-                        columns_drop = drop_colnames
-                    trace.drop(columns_drop, axis=1, inplace=True)
-                    # assuming all the files have same headers and same columns are droppped
-                    if cols_names is None:
-                        cols_names = trace.columns.values
-                    # slicing
-                    new_trace = slice_dataset(trace, slice_len)
-
-                    print("Generating ORAN traffic KPI dataset")
-                    # create labels based on dataset generation mode
-                    if mode == 'emu' or mode == 'emuc':
-                        # 4 traffic classes problem
-                        if ix == 0:
-                            print("\teMBB class")
-                            embb_traces.append(new_trace)
-                            embb_labels.append(check_slices(new_trace, ix, check_zeros)) # labels are numbers (i.e. no 1 hot encoded)
-                        elif ix == 1:
-                            print("\tMMTc class")
-                            mmtc_traces.append(new_trace)
-                            mmtc_labels.append(check_slices(new_trace, ix, check_zeros))
-                        elif ix == 2:
-                            print("\tURLLc class")
-                            urll_traces.append(new_trace)
-                            urll_labels.append(check_slices(new_trace, ix, check_zeros))
-                        elif ix == 3:
-                            print("\tControl / CTRL class")
-                            ctrl_traces.append(new_trace)
-                            ctrl_labels.append(np.ones((new_trace.shape[0],), dtype=np.int32)*ix)
-                    elif mode == 'co':
-                        # binary traffic labeling (i.e. yes/no active traffic
-                        if ix != 3:
-                            print("Active traffic class")
-                            if ix == 0:
-                                embb_traces.append(new_trace)
-                                embb_labels.append( np.zeros((new_trace.shape[0],), dtype=np.int32) ) # labels are numbers (i.e. no 1 hot encoded)
-                            elif ix == 1:
-                                mmtc_traces.append(new_trace)
-                                mmtc_labels.append( np.zeros((new_trace.shape[0],), dtype=np.int32) )
-                            elif ix == 2:
-                                urll_traces.append(new_trace)
-                                urll_labels.append( np.zeros((urll_traces.shape[0],), dtype=np.int32) )
-                        else:
-                            print("\tControl / CTRL class")
-                            ctrl_traces.append(new_trace)
-                            ctrl_labels.append( np.ones((ctrl_traces.shape[0],), dtype=np.int32) )
-                    else:
-                        print("[gen_slice_dataset] ERROR: class configuration \"", mode, "\" is not supported. Aborting.")
-                        sys.exit(1)
-
-            # consolidate all the samples generated for each traffic type
-            if len(embb_traces) > 0 and len(embb_labels) > 0:
-                embb_traces = np.concatenate(embb_traces)
-                embb_labels = np.concatenate(embb_labels)
-            if len(mmtc_traces) > 0 and len(mmtc_labels) > 0:
-                mmtc_traces = np.concatenate(mmtc_traces)
-                mmtc_labels = np.concatenate(mmtc_labels)
-            if len(urll_traces) > 0 and len(urll_traces) > 0:
-                urll_traces = np.concatenate(urll_traces)
-                urll_labels = np.concatenate(urll_labels)
-            if len(ctrl_traces) > 0 and len(ctrl_labels) > 0:
-                ctrl_traces = np.concatenate(ctrl_traces)
-                ctrl_labels = np.concatenate(ctrl_labels)
+            if cols_names is None:  # NOTE: assume Trials have all the same columns, we set only once
+                cols_names = cols_n
 
             if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
-                all_input = np.concatenate((embb_traces, mmtc_traces, urll_traces, ctrl_traces), axis=0)
-                all_labels = np.concatenate((embb_labels, mmtc_labels, urll_labels, ctrl_labels), axis=0)
+                all_input = np.concatenate((trial_samples['embb']['traces'],
+                                            trial_samples['mmtc']['traces'],
+                                            trial_samples['urll']['traces'],
+                                            trial_samples['ctrl']['traces']), axis=0)
+                all_labels = np.concatenate((trial_samples['embb']['labels'],
+                                             trial_samples['mmtc']['labels'],
+                                             trial_samples['urll']['labels'],
+                                             trial_samples['ctrl']['labels']), axis=0)
             else:
-                all_input = np.concatenate((embb_traces, mmtc_traces, urll_traces), axis=0)
-                all_labels = np.concatenate((embb_labels, mmtc_labels, urll_labels), axis=0)
+                all_input = np.concatenate((trial_samples['embb']['traces'],
+                                            trial_samples['mmtc']['traces'],
+                                            trial_samples['urll']['traces'],), axis=0)
+                all_labels = np.concatenate((trial_samples['embb']['labels'],
+                                             trial_samples['mmtc']['labels'],
+                                             trial_samples['urll']['labels'], ), axis=0)
 
         elif data_type == "multiUE":
 
-            all_input = None
-            all_labels = None
-            ds_tree = load_csv_dataset__multi(data_path, trial, isControlClass)
+            trial_samples, cols_n, all_input, all_labels = get_trace_multiUE(data_path,
+                                                                             drop_colnames,
+                                                                             isControlClass,
+                                                                             mode,
+                                                                             slice_len,
+                                                                             trial)
 
-            for multi_conf in ds_tree.keys():
-                for u in ds_tree[multi_conf].keys():
-                    print("Generating slices: ", multi_conf, u)
-                    # process each user trace individually
-                    ds = ds_tree[multi_conf][u]['kpis']
-                    columns_drop = drop_colnames
-                    if len(columns_drop) > 0:
-                        ds.drop(columns_drop, axis=1, inplace=True)
-                    # obtain column names after drop
-                    # (assuming all the files have same columns and same columns dropped)
-                    if cols_names is None:
-                        cols_names = ds.columns.values
-                    # slicing
-                    new_trace = slice_dataset(ds, slice_len)
+            if cols_names is None:  # NOTE: assume Trials have all the same columns, we set only once
+                cols_names = cols_n
 
-
-                    lbl = ds_tree[multi_conf][u]["label"]
-                    if lbl == "embb" or lbl == "mmtc" or lbl == "urll":
-                        class_ix = classmap[lbl]
-                        labels = check_slices(new_trace, class_ix, check_zeros)
-                    elif lbl == "ctrl":
-                        class_ix = 4
-                        labels = np.ones((new_trace.shape[0],), dtype=np.int32) * class_ix
-
-                    if all_input is None:
-                        all_input = np.array(new_trace)
-                    else:
-                        all_input = np.concatenate((all_input, new_trace), axis=0)
-
-                    if all_labels is None:
-                        all_labels = labels
-                    else:
-                        all_labels = np.concatenate((all_labels, labels))
 
         trials_in.append(all_input)
         trials_lbl.append(all_labels)
@@ -286,24 +193,177 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
 
     return trials_ds, columns_maxmin
 
-"""
-def normalize_KPIs(cols_names, trials_in):
-    # create a normalized version of the features (each feature is normalized independently)
-    trials_in_norm = trials_in.copy()
-    columns_maxmin = {}
-    for c in range(trials_in_norm.shape[2]):
-        if cols_names[c] != 'Timestamp':
-            col_max = trials_in_norm[:, :, c].max()
-            col_min = trials_in_norm[:, :, c].min()
-            if not (col_max == col_min):
-                print('Normalizing Col.', cols_names[c], '[', c, '] -- Max', col_max, ', Min', col_min)
-                trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
+
+def get_trace_multiUE(data_path, drop_colnames, isControlClass, mode,
+                      slice_len, trial, use_multi_conf='all', check_zeros=False):
+    """
+    This function is used to generate (sample, label) pairs from MultiUE traces. Note that each Trial contains
+    mutliple configurations of transmitting UEs (e.g. "multi4" means 4 UEs associated to the same base station)
+
+    :param data_path:
+    :param drop_colnames:
+    :param isControlClass:
+    :param mode:
+    :param slice_len:
+    :param trial:
+    :param use_multi_conf:
+    :param check_zeros:
+    :return:
+    """
+    all_input = None
+    all_labels = None
+    cols_names = None
+    ds_tree = load_csv_dataset__multi(data_path, trial, isControlClass)
+    sliced_ds = {}
+    for multi_conf in ds_tree.keys():
+        if use_multi_conf == 'all' or multi_conf == use_multi_conf:
+            for u in ds_tree[multi_conf].keys():
+                print("Generating slices: ", multi_conf, u)
+                # process each user trace individually
+                ds = ds_tree[multi_conf][u]['kpis']
+                columns_drop = drop_colnames
+                if len(columns_drop) > 0:
+                    ds.drop(columns_drop, axis=1, inplace=True)
+                # obtain column names after drop
+                # (assuming all the files have same columns and same columns dropped)
+                if cols_names is None:
+                    cols_names = ds.columns.values
+                # slicing
+                # TODO adjust this and single UE function to return traces without slicing
+                new_trace = slice_dataset(ds, slice_len)
+
+                lbl = ds_tree[multi_conf][u]["label"]
+                if mode == 'emu' or mode == 'emuc':
+                    if lbl == "embb" or lbl == "mmtc" or lbl == "urll":
+                        class_ix = classmap[lbl]
+                        labels = check_slices(new_trace, class_ix, check_zeros)
+                    elif lbl == "ctrl":
+                        class_ix = 4
+                        labels = np.ones((new_trace.shape[0],), dtype=np.int32) * class_ix
+                elif mode == 'co':
+                    if lbl == "embb" or lbl == "mmtc" or lbl == "urll":
+                        labels = np.zeros((new_trace.shape[0],), dtype=np.int32)
+                    elif lbl == "ctrl":
+                        labels = np.ones((new_trace.shape[0],), dtype=np.int32)
+
+                sliced_ds[lbl] = {'traces': new_trace, 'labels': labels}
+
+                if all_input is None:
+                    all_input = np.array(new_trace)
+                else:
+                    all_input = np.concatenate((all_input, new_trace), axis=0)
+
+                if all_labels is None:
+                    all_labels = labels
+                else:
+                    all_labels = np.concatenate((all_labels, labels))
+
+    return sliced_ds, cols_names, all_input, all_labels
+
+
+def get_trace_singleUE(data_path, data_type, drop_colnames, isControlClass, mode, slice_len,
+                       trial, check_zeros=False):
+    isRaw = "_raw" in data_type
+    ctrl_logs, embb_logs, mmtc_logs, urll_logs = load_csv_dataset__single(data_path, trial, isControlClass, isRaw)
+    # stack together all data from all traffic class
+    if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+        datasets = [embb_logs, mmtc_logs, urll_logs, ctrl_logs]
+    else:
+        datasets = [embb_logs, mmtc_logs, urll_logs]
+
+    embb_traces = []
+    embb_labels = []
+    mmtc_traces = []
+    mmtc_labels = []
+    urll_traces = []
+    urll_labels = []
+    ctrl_traces = []
+    ctrl_labels = []
+
+    cols_names = None
+
+    for ix, ds in enumerate(datasets):
+
+        for trace in ds:  # analyze each trace for each traffic type
+
+            # let's first remove undesired columns from the dataframe (these features are not relevant for traffic classification)
+            if not isRaw:
+                columns_drop = ['Timestamp',
+                                'tx_errors downlink (%)']  # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
             else:
-                trials_in_norm[:, :, c] = 0 # set all data as zero (we don't need this info cause it never changes)
-            # store max/min values for later normalization
-            columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
-    return columns_maxmin, trials_in_norm
-"""
+                columns_drop = drop_colnames
+            trace.drop(columns_drop, axis=1, inplace=True)
+
+            # NOTE: assuming all the files have same headers and same columns are dropped
+            if cols_names is None:
+                cols_names = trace.columns.values
+
+            # slicing
+            new_trace = slice_dataset(trace, slice_len)
+
+            print("Generating ORAN traffic KPI dataset")
+            # create labels based on dataset generation mode
+            if mode == 'emu' or mode == 'emuc':
+                # 4 traffic classes problem
+                if ix == 0:
+                    print("\teMBB class")
+                    embb_traces.append(new_trace)
+                    embb_labels.append(
+                        check_slices(new_trace, ix, check_zeros))  # labels are numbers (i.e. no 1 hot encoded)
+                elif ix == 1:
+                    print("\tMMTc class")
+                    mmtc_traces.append(new_trace)
+                    mmtc_labels.append(check_slices(new_trace, ix, check_zeros))
+                elif ix == 2:
+                    print("\tURLLc class")
+                    urll_traces.append(new_trace)
+                    urll_labels.append(check_slices(new_trace, ix, check_zeros))
+                elif ix == 3:
+                    print("\tControl / CTRL class")
+                    ctrl_traces.append(new_trace)
+                    ctrl_labels.append(np.ones((new_trace.shape[0],), dtype=np.int32) * ix)
+            elif mode == 'co':
+                # binary traffic labeling (i.e. yes/no active traffic
+                if ix != 3:
+                    print("Active traffic class")
+                    if ix == 0:
+                        embb_traces.append(new_trace)
+                        embb_labels.append(np.zeros((new_trace.shape[0],),
+                                                    dtype=np.int32))  # labels are numbers (i.e. no 1 hot encoded)
+                    elif ix == 1:
+                        mmtc_traces.append(new_trace)
+                        mmtc_labels.append(np.zeros((new_trace.shape[0],), dtype=np.int32))
+                    elif ix == 2:
+                        urll_traces.append(new_trace)
+                        urll_labels.append(np.zeros((urll_traces.shape[0],), dtype=np.int32))
+                else:
+                    print("\tControl / CTRL class")
+                    ctrl_traces.append(new_trace)
+                    ctrl_labels.append(np.ones((ctrl_traces.shape[0],), dtype=np.int32))
+            else:
+                print("[gen_slice_dataset] ERROR: class configuration \"", mode, "\" is not supported. Aborting.")
+                sys.exit(1)
+    # consolidate all the samples generated for each traffic type
+    if len(embb_traces) > 0 and len(embb_labels) > 0:
+        embb_traces = np.concatenate(embb_traces)
+        embb_labels = np.concatenate(embb_labels)
+    if len(mmtc_traces) > 0 and len(mmtc_labels) > 0:
+        mmtc_traces = np.concatenate(mmtc_traces)
+        mmtc_labels = np.concatenate(mmtc_labels)
+    if len(urll_traces) > 0 and len(urll_traces) > 0:
+        urll_traces = np.concatenate(urll_traces)
+        urll_labels = np.concatenate(urll_labels)
+    if len(ctrl_traces) > 0 and len(ctrl_labels) > 0:
+        ctrl_traces = np.concatenate(ctrl_traces)
+        ctrl_labels = np.concatenate(ctrl_labels)
+
+    return {
+        'ctrl': {'traces': ctrl_traces, 'labels': ctrl_labels},
+        'embb': {'traces': embb_traces, 'labels': embb_labels},
+        'mmtc': {'traces': mmtc_traces, 'labels': mmtc_labels},
+        'urll': {'traces': urll_traces, 'labels': urll_labels}
+    }, cols_names
+
 
 def extract_max_min_values(cols_names, trials_in):
     columns_maxmin = {}
@@ -469,9 +529,11 @@ class ORANTracesDataset(Dataset):
         if sanitize:
             obs_std = np.std(self.obs_input.numpy(), axis=(0, 1))
             features_to_remove = np.where(obs_std == 0)[0]
-            all_feats = torch.arange(0,self.obs_input.shape[-1])
-            indexes_to_keep = [i for i in range(len(all_feats)) if i not in features_to_remove]
+            assert np.all(features_to_remove == self.norm_params['info']['exclude_cols_ix']), "Double check that the column to exclude correpsonds to the ones in the common paramters"
+            all_feats = torch.arange(0, self.obs_input.shape[-1])
+            indexes_to_keep = [i for i in range(len(all_feats)) if i not in self.norm_params['info']['exclude_cols_ix']]
             self.obs_input = self.obs_input[:, :, indexes_to_keep]
+
 
         self.sanitized = sanitize
 
@@ -581,6 +643,8 @@ if __name__ == "__main__":
     trials = args.trials
     trials_multi = args.trials_multi
     ctrl_class = 3
+    isPlot = False
+    norm_threshold = 2.5
 
     datasets = []
 
@@ -666,7 +730,7 @@ if __name__ == "__main__":
 
         common_normp['info'] = {'exclude_cols_ix': novar_keys}
         filemarker = '__' + args.filemarker if args.filemarker else ''
-        global_norm_path = os.path.join(path, 'global__cols_maxmin'+filemarker+'.pkl')
+        global_norm_path = os.path.join(path, 'global__cols_maxmin'+filemarker+'_slice'+str(args.slicelen)+'.pkl')
 
         # then let's create an alternative version of the datasets normalized with global paramters and save it in a separate file
         for ds, kpi_p, ds_path, kpi_p_path in datasets:
@@ -703,38 +767,37 @@ if __name__ == "__main__":
             common_normp['info']['mean_ctrl_sample'] = mean_ctrl_sample
             common_normp['info']['std_ctrl_sample'] = std_ctrl_sample
 
-            # TODO integrate this code here and remove it from torch_train_ORAN.py
+            if isPlot:
+                import matplotlib.pyplot as plt
+                # compute euclidean distance between samples of other classes and mean ctrl sample
 
-            import matplotlib.pyplot as plt
-            # compute euclidean distance between samples of other classes and mean ctrl sample
+                for cl in [0, 1, 2, 3]:
+                    print("Difference of mean class ctrl (4) with class", cl)
 
-            for cl in [0, 1, 2, 3]:
-                print("Difference of mean class ctrl (4) with class", cl)
-
-                all_sample = None
-                for ds, kpi_p, ds_path, kpi_p_path in datasets:
-                    for t in ['train', 'valid']:
-                        ixs_ctrl = ds[t]['labels'] == cl
-                        if torch.any(ixs_ctrl):
-                            if all_sample is None:
-                                all_sample = ds[t]['samples']['norm'][ixs_ctrl]
-                            else:
-                                all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+                    all_sample = None
+                    for ds, kpi_p, ds_path, kpi_p_path in datasets:
+                        for t in ['train', 'valid']:
+                            ixs_ctrl = ds[t]['labels'] == cl
+                            if torch.any(ixs_ctrl):
+                                if all_sample is None:
+                                    all_sample = ds[t]['samples']['norm'][ixs_ctrl]
+                                else:
+                                    all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
 
 
-                norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2)) # TODO check dimensions
-                print("Mean norm", np.mean(norm), "Std.", np.std(norm))
-                x_axis = np.arange(0, 15, 0.01)
-                plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class ' + str(cl))
-            plt.legend()
-            plt.show()
-    
-            plt.imshow(mean_ctrl_sample)
-            plt.colorbar()
-            plt.show()
-            #plt.imshow(std_ctrl_sample)
-            #plt.colorbar()
-            #plt.show()
+                    norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2))
+                    print("Mean norm", np.mean(norm), "Std.", np.std(norm))
+                    x_axis = np.arange(0, 15, 0.01)
+                    plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class ' + str(cl))
+                plt.legend()
+                plt.show()
+
+                plt.imshow(mean_ctrl_sample)
+                plt.colorbar()
+                plt.show()
+                #plt.imshow(std_ctrl_sample)
+                #plt.colorbar()
+                #plt.show()
 
             all_sample_noctrl = None
             all_labels_noctrl = None
@@ -751,11 +814,12 @@ if __name__ == "__main__":
             # show a barplot representing the amount of samples that should be relabeled
             obs_excludecols = all_sample_noctrl[:, :, list(include_ixs)]
             norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
-            possible_ctrl_ixs = norm < 2.5
+            possible_ctrl_ixs = norm < norm_threshold # TODO this need to be changed to a dynamic threshold based on slice length and datasets combinations
             possible_ctrl_labels = all_labels_noctrl[possible_ctrl_ixs].numpy()
             unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
-            plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
-            plt.show()
+            if isPlot:
+                plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
+                plt.show()
 
         # lastly, let's save the new global parameters
         safe_pickle_dump(global_norm_path, common_normp)

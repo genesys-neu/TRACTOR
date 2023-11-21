@@ -4,12 +4,14 @@ from typing import Dict
 from torch import nn
 from torch.utils.data import DataLoader
 from python.ORAN_dataset import *
-from python.torch_train_ORAN_colosseum import ConvNN as global_model
+from python.ORAN_models import *
+#from vit_pytorch import ViT
 import time
 from xapp_control import *
 
 
-def main():
+def main(model_type, torch_model_path, norm_param_path, Nclass):
+
     # configure logger and console output
     logging.basicConfig(level=logging.DEBUG, filename='/home/xapp-logger.log', filemode='a+',
                         format='%(asctime)-15s %(levelname)-8s %(message)s')
@@ -21,12 +23,13 @@ def main():
 
     control_sck = open_control_socket(4200)
 
-    slice_len = 8
-    Nclass = 4
-    num_feats = 17
-    torch_model_path = 'model/model_weights__slice8.pt'
-    norm_param_path = 'logs/cols_maxmin.pkl'
+    pos_enc = False # not supported at the moment
+
     colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
+    # we obtain num of input features this from the normalization/relabeling info
+    num_feats = colsparam_dict['info']['mean_ctrl_sample'].shape[1]
+    slice_len = colsparam_dict['info']['mean_ctrl_sample'].shape[0]
+
     # initialize the KPI matrix (4 samples, 19 KPIs each)
     #kpi = np.zeros([slice_len, num_feats])
     kpi = []
@@ -35,7 +38,16 @@ def main():
 
     # initialize the ML model
     print('Init ML model...')
-    model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
+    if model_type in [TransformerNN, TransformerNN_v2]:
+        model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1,
+                             custom_enc=True)
+    elif model_type == ConvNN:
+        model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
+    else:
+        # TODO
+        print("ViT/other model is not yet supported. Aborting.")
+        exit(-1)
+
     if torch.cuda.is_available():
         device = torch.device("cuda")
         model.load_state_dict(torch.load(torch_model_path, map_location='cuda:0'))
@@ -65,22 +77,6 @@ def main():
             logging.info('Received data: ' + repr(data_sck))
             # with open('/home/kpi_new_log.txt', 'a') as f:
             #     f.write('{}\n'.format(data_sck))
-
-            """
-            if data_sck[0] == 'm':
-                print('Multiple recv')  # TODO handle this case
-                if not isCont:
-                    isCont = True   # activate continue mode
-                    cont_data_sck = data_sck[1:]    # init the string
-                else:    # we are already in continue mode
-                    cont_data_sck += data_sck[1:]
-                continue    # don't process the string and continue appending
-            elif isCont:
-                cont_data_sck += data_sck
-                data_sck = cont_data_sck
-                cont_data_sck = ""
-                isCont = False
-            """
 
 
             data_sck = data_sck.replace(',,', ',')
@@ -131,7 +127,14 @@ def main():
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
             curr_timestamp = kpi_new[0]
             # let's remove the KPIs we don't need
-            kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
+            all_feats = np.arange(0, kpi_new.shape[0])
+
+            if colsparam_dict[0] != 'Timestamp':
+                exclude_param = colsparam_dict['info']['exclude_cols_ix'] + 1   # consider the missing Timestamp feature
+            else:
+                exclude_param = colsparam_dict['info']['exclude_cols_ix']
+            indexes_to_keep = np.array([i for i in range(len(all_feats)) if i not in exclude_param])
+            kpi_filt = kpi_new[indexes_to_keep]
 
             if curr_timestamp > last_timestamp:
                 last_timestamp = curr_timestamp
@@ -149,7 +152,7 @@ def main():
                     # let's normalize each columns based on the params derived while training
                     assert (np_kpi.shape[1] == len(list(colsparam_dict.keys())))
                     for c in range(np_kpi.shape[1]):
-                        print('*****', c, '*****')
+                        logging.info('***** '+str(c)+' *****')
                         logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
                         np_kpi[:, c] = (np_kpi[:, c] - colsparam_dict[c]['min']) / (
                                     colsparam_dict[c]['max'] - colsparam_dict[c]['min'])
@@ -171,4 +174,29 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_path", required=True, help="Path to TRACTOR model to load."  )
+    parser.add_argument("--norm_param_path", required=True, default="", help="Normalization parameters path.")
+    parser.add_argument("--model_type", required=True, default="Tv1", choices=['CNN', 'Tv1', 'Tv2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
+    args, _ = parser.parse_known_args()
+
+    if args.model_type is not None:
+        if args.model_type == 'Tv1':
+            model_type = TransformerNN
+        elif args.model_type == 'Tv2':
+            model_type = TransformerNN_v2
+        elif args.model_type == 'ViT':
+            #transformer = ViT
+            print("Transformer type "+args.transformer+" is not yet supported.")
+            exit(-1)
+        elif args.model_type == 'CNN':
+            model_type = ConvNN
+
+    torch_model_path = args.model_path
+    norm_param_path = args.norm_param_path
+
+    Nclass = 4
+
+    main(model_type, torch_model_path, norm_param_path, Nclass)

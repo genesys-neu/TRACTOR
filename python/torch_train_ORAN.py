@@ -124,33 +124,8 @@ def train_func(config: Dict):
         train_dataloader = train.torch.prepare_data_loader(train_dataloader)
         test_dataloader = train.torch.prepare_data_loader(test_dataloader)
 
-    # Create model.
-    if global_model in [TransformerNN, TransformerNN_v2]:
-        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1, custom_enc=True)
-        loss_fn = nn.NLLLoss()
-    elif global_model == ViT:
-        patch_Tsize = 4
-        model = global_model(
-            image_size=(slice_len, num_feats),
-            patch_size=(patch_Tsize,num_feats),
-            num_classes=Nclass,
-            channels=1,
-            dim=128,
-            heads=8,
-            depth=2,
-            mlp_dim=2048,
-            dropout=0.1,
-            emb_dropout=0.1
-            )
-        # this loss fn is different (cause model doesn't have Softmax)
-        loss_fn = nn.CrossEntropyLoss()
-        # let's also add a transform function to add the channel axis for visual transformer in dataset samples
-        ds_train.transform = add_first_dim
-        ds_test.transform = add_first_dim
+    model, loss_fn = TRACTOR_model(Nclass, global_model, num_feats, slice_len, pos_enc)
 
-    else:
-        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
-        loss_fn = nn.NLLLoss()
     if useRay:
         model = train.torch.prepare_model(model)
     else:
@@ -217,6 +192,37 @@ def train_func(config: Dict):
     # return required for backwards compatibility with the old API
     # TODO(team-ml) clean up and remove return
     return loss_results
+
+
+def TRACTOR_model(Nclass, global_model, num_feats, slice_len, pos_enc=False):
+    # Create model.
+    if global_model in [TransformerNN, TransformerNN_v2]:
+        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1,
+                             custom_enc=True)
+        loss_fn = nn.NLLLoss()
+    elif global_model == ViT:
+        patch_Tsize = 4
+        model = global_model(
+            image_size=(slice_len, num_feats),
+            patch_size=(patch_Tsize, num_feats),
+            num_classes=Nclass,
+            channels=1,
+            dim=128,
+            heads=8,
+            depth=2,
+            mlp_dim=2048,
+            dropout=0.1,
+            emb_dropout=0.1
+        )
+        # this loss fn is different (cause model doesn't have Softmax)
+        loss_fn = nn.CrossEntropyLoss()
+        # let's also add a transform function to add the channel axis for visual transformer in dataset samples
+        ds_train.transform = add_first_dim
+        ds_test.transform = add_first_dim
+    else:
+        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
+        loss_fn = nn.NLLLoss()
+    return  model, loss_fn
 
 
 def debug_train_func(config: Dict):
@@ -381,10 +387,9 @@ if __name__ == "__main__":
     else: 
         cp_path = args.cp_path
         check_zeros = args.relabel_test
-        ctrl_flag = cp_path.split('/')[-1].split('.')[-1] == 'ctrl' # check if model trained under label correction
 
         global_model = train_config['global_model']
-        model = global_model(classes=Nclass, slice_len=train_config['slice_len'], num_feats=train_config['num_feats'])
+        model, loss_fn = TRACTOR_model(Nclass, global_model, train_config['num_feats'], train_config['slice_len'], train_config['pos_enc'])
 
         if not args.useRay:
             model.load_state_dict(torch.load(cp_path, map_location='cuda:0')['model_state_dict'])
@@ -396,6 +401,7 @@ if __name__ == "__main__":
             model_params_filename =  os.path.join('model', 'model_weights__slice'+str(train_config['slice_len'])+'.pt')
             torch.save(model.state_dict(), model_params_filename)
             model.load_state_dict(torch.load(model_params_filename, map_location='cuda:0'))
+
         model.to(device)
         model.eval()
 
