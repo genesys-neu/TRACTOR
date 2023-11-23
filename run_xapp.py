@@ -50,10 +50,10 @@ def main(model_type, torch_model_path, norm_param_path, Nclass):
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        model.load_state_dict(torch.load(torch_model_path, map_location='cuda:0'))
+        model.load_state_dict(torch.load(torch_model_path, map_location='cuda:0')['model_state_dict'])
     else:
         device = 'cpu'
-        model.load_state_dict(torch.load(torch_model_path))
+        model.load_state_dict(torch.load(torch_model_path)['model_state_dict'])
     model.to(device)
     rand_x = torch.Tensor(np.random.random((1, slice_len, num_feats)))
     rand_x = rand_x.to(device)
