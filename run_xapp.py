@@ -10,7 +10,7 @@ import time
 from xapp_control import *
 
 
-def main(model_type, torch_model_path, norm_param_path, Nclass):
+def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31):
 
     # configure logger and console output
     logging.basicConfig(level=logging.DEBUG, filename='/home/xapp-logger.log', filemode='a+',
@@ -24,10 +24,15 @@ def main(model_type, torch_model_path, norm_param_path, Nclass):
     control_sck = open_control_socket(4200)
 
     pos_enc = False # not supported at the moment
-
+    all_feats = np.arange(0, all_feats_raw)
     colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
+    if colsparam_dict[0] != 'Timestamp':
+        exclude_param = colsparam_dict['info']['exclude_cols_ix'] + 1  # consider the missing Timestamp feature
+    else:
+        exclude_param = colsparam_dict['info']['exclude_cols_ix']
+    indexes_to_keep = np.array([i for i in range(len(all_feats)) if i not in exclude_param])
     # we obtain num of input features this from the normalization/relabeling info
-    num_feats = colsparam_dict['info']['mean_ctrl_sample'].shape[1]
+    num_feats = len(indexes_to_keep)
     slice_len = colsparam_dict['info']['mean_ctrl_sample'].shape[0]
 
     # initialize the KPI matrix (4 samples, 19 KPIs each)
@@ -118,7 +123,8 @@ def main(model_type, torch_model_path, norm_param_path, Nclass):
                 data_sck = data_sck_m
 
             kpi_new = np.fromstring(data_sck, sep=',')
-            if kpi_new.shape[0] < 31:
+
+            if kpi_new.shape[0] < all_feats_raw:
                 logging.info('Discarding KPI: too short ')
                 continue # discard incomplete KPIs
                         # [TODO] this is to address the multiple 'm' case, but not ideal like this
@@ -126,14 +132,10 @@ def main(model_type, torch_model_path, norm_param_path, Nclass):
             # check to see if the recently received KPI is actually new
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
             curr_timestamp = kpi_new[0]
-            # let's remove the KPIs we don't need
-            all_feats = np.arange(0, kpi_new.shape[0])
 
-            if colsparam_dict[0] != 'Timestamp':
-                exclude_param = colsparam_dict['info']['exclude_cols_ix'] + 1   # consider the missing Timestamp feature
-            else:
-                exclude_param = colsparam_dict['info']['exclude_cols_ix']
-            indexes_to_keep = np.array([i for i in range(len(all_feats)) if i not in exclude_param])
+            # let's remove the KPIs we don't need
+            assert kpi_new.shape[0] == all_feats_raw, "Check that we are indeed working with the intended number of raw KPIs"
+
             kpi_filt = kpi_new[indexes_to_keep]
 
             if curr_timestamp > last_timestamp:
