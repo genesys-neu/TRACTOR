@@ -19,6 +19,8 @@ To add RF interference use the script:
 ```
 sh interference_tgen.sh genesys-<gNB #node> genesys-<UE #node> genesys-<interference #node>
 ````
+Use the `webinar-interactive-v1` SRN for the interfering node.
+
 You can adjust the interference by editing ```uhd_tx_tone.sh```.
 
 ## Malicious UE traffic
