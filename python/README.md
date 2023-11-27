@@ -34,6 +34,10 @@ IMPORTANT: this code assumes that all CSV files have the same header/columns nam
 
 ### Single UE (raw) traces
 This is to replicate the initial results obtained only with Single UE traces. 
-```python ORAN_dataset.py --trials Trial1 Trial2 Trial3 Trial4 Trial5 Trial6 --mode emuc --data_type singleUE_raw --slicelen 16 --filemarker noTimestamp --drop_colnames Timestamp```
+```
+python ORAN_dataset.py --trials Trial1 Trial2 Trial3 Trial4 Trial5 Trial6 --mode emuc --data_type singleUE_raw --slicelen 16 --filemarker noTimestamp --drop_colnames Timestamp
+```
 Now train with basic Transformer (no positional autoencoder, 1 head, no CLS token)
-```python torch_train_ORAN.py --ds_file SingleUE/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice16_singleUE_raw_noTimestamp.pkl --isNorm --ds_path ../logs --cp_path ./train_logs/ --norm_param_path SingleUE/cols_maxmin__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice16_singleUE_raw_noTimestamp.pkl --exp_name no_timestamp --relabel_train --transformer v1```
+```
+python torch_train_ORAN.py --ds_file SingleUE/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice16_singleUE_raw_noTimestamp.pkl --isNorm --ds_path ../logs --cp_path ./train_logs/ --norm_param_path SingleUE/cols_maxmin__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice16_singleUE_raw_noTimestamp.pkl --exp_name no_timestamp --relabel_train --transformer v1
+```
