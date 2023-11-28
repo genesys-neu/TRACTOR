@@ -27,16 +27,35 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
     all_feats = np.arange(0, all_feats_raw)
     colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
     if colsparam_dict[0] != 'Timestamp':
-        exclude_param = colsparam_dict['info']['exclude_cols_ix'] + 1  # consider the missing Timestamp feature
+        # consider the missing Timestamp feature in the normalization parameters
+        # by adjusting indexes of features to be removed.
+        exclude_param = [0] + [i + 1 for i in colsparam_dict['info']['exclude_cols_ix']]
+        # Also readjust the features keys in the dictionary
+        colsparams = {key + 1: value for key, value in colsparam_dict.items() if isinstance(key, int)}
+        colsparams[0] = {'name': 'Timestamp', 'max': None, 'min': None}
     else:
         exclude_param = colsparam_dict['info']['exclude_cols_ix']
+        colsparams = {key: value for key, value in colsparam_dict.items() if isinstance(key, int)}
+
     indexes_to_keep = np.array([i for i in range(len(all_feats)) if i not in exclude_param])
     # we obtain num of input features this from the normalization/relabeling info
     num_feats = len(indexes_to_keep)
     slice_len = colsparam_dict['info']['mean_ctrl_sample'].shape[0]
+    # create a map from indexes after features/KPIs filtering and original feature index
+    # to retrieve normalization parameters
+    map_feat2KPI = dict(zip(np.arange(0, len(indexes_to_keep)), indexes_to_keep))
 
-    # initialize the KPI matrix (4 samples, 19 KPIs each)
-    #kpi = np.zeros([slice_len, num_feats])
+    print("INFO:\n",
+          "\tSlice len. (T) =", slice_len, "\tNum. Feats (K)=", num_feats, "\n",
+          "\tIndexes to be kept:", repr(indexes_to_keep),"\n",
+          "\tIndexes to be excluded:", repr(exclude_param),"\n",
+          "\tFeature-to-KPI map", repr(map_feat2KPI), "\n",
+          "Column params for normalization:\n", repr(colsparams)
+          )
+
+
+
+    # initialize the KPI matrix
     kpi = []
     last_timestamp = 0
     curr_timestamp = 0
@@ -127,18 +146,14 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
             if kpi_new.shape[0] < all_feats_raw:
                 logging.info('Discarding KPI: too short ')
                 continue # discard incomplete KPIs
-                        # [TODO] this is to address the multiple 'm' case, but not ideal like this
 
-            # check to see if the recently received KPI is actually new
-            # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
-            curr_timestamp = kpi_new[0]
-
-            # let's remove the KPIs we don't need
             assert kpi_new.shape[0] == all_feats_raw, "Check that we are indeed working with the intended number of raw KPIs"
-
-            kpi_filt = kpi_new[indexes_to_keep]
+            # check to see if the recently received KPI is actually new
+            curr_timestamp = kpi_new[0] # first feature is timestamp
 
             if curr_timestamp > last_timestamp:
+                # let's remove the KPIs we don't need
+                kpi_filt = kpi_new[indexes_to_keep]
                 last_timestamp = curr_timestamp
                 if len(kpi) < slice_len:
                     # if the incoming KPI list is empty, just add the incoming KPIs
@@ -152,15 +167,16 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
                     # let's create a numpy array
                     np_kpi = np.array(kpi)
                     # let's normalize each columns based on the params derived while training
-                    assert (np_kpi.shape[1] == len(list(colsparam_dict.keys())))
-                    for c in range(np_kpi.shape[1]):
-                        logging.info('***** '+str(c)+' *****')
-                        logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
-                        np_kpi[:, c] = (np_kpi[:, c] - colsparam_dict[c]['min']) / (
-                                    colsparam_dict[c]['max'] - colsparam_dict[c]['min'])
-                        logging.info('Normalized vector: '+repr(np_kpi[:, c]))
+                    assert (np_kpi.shape[1] == len(list(map_feat2KPI.keys()))), "Check that filtered features has same size of mapped KPIs for normalization"
+                    for f in range(np_kpi.shape[1]):
+                        c = map_feat2KPI[f]
+                        logging.info('***** ' + colsparams[c]['name']+' ('+str(c)+') *****')
+                        logging.info('Un-normalized vector'+repr(np_kpi[:, f]))
+                        np_kpi[:, f] = (np_kpi[:, f] - colsparams[c]['min']) / (
+                                    colsparams[c]['max'] - colsparams[c]['min'])
+                        logging.info('Normalized vector: '+repr(np_kpi[:, f]))
                     # and then pass it to our model as a torch tensor
-                    t_kpi = torch.Tensor(np_kpi.reshape(1, np_kpi.shape[0], np_kpi.shape[1])).to(device)
+                    t_kpi = torch.Tensor(np.expand_dims(np_kpi, axis=0)).to(device)
                     try:
                         pred = model(t_kpi)
                         this_class = pred.argmax(1)
