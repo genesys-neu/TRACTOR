@@ -9,12 +9,12 @@ for t in ./raw/*.csv
 do
   echo "TRACE DIR $t"
   echo "***** Run traffic on gNB *****"
-  sshpass -p "scope" ssh -tt $1 "cd /root/traffic_gen && python traffic_gen.py --eNB -f ${t}" &   # this will have to let the next command go through
+  sshpass -p "scope" ssh -tt $1 "cd /root/TRACTOR && python traffic_gen.py --eNB -f ${t}" &   # this will have to let the next command go through
   echo "Sleep for 5 secs"
   sleep 5  # let's wait few seconds
   echo "***** Run traffic on UE *****"
   start_ts=`date +%s%N | cut -b1-13`
-  sshpass -p "scope" ssh -tt $2 "cd /root/traffic_gen && python traffic_gen.py -f ${t}" &
+  sshpass -p "scope" ssh -tt $2 "cd /root/TRACTOR && python traffic_gen.py -f ${t}" &
   wait  # this will wait until all child processes terminates
   end_ts=`date +%s%N | cut -b1-13`
   echo "START: $start_ts\nEND: $end_ts\n"
