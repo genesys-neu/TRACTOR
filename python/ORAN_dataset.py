@@ -22,7 +22,7 @@ def load_csv_traces(trials, data_path, data_type="singleUE_clean", norm_params=N
             isRaw = False
             ctrl_traces, embb_traces, mmtc_traces, urll_traces = load_csv_dataset__single(data_path, trial, isControlClass, isRaw)
             # stack together all data from all traffic class
-            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))): # TODO: remove the .csv check
                 datasets = [embb_traces, mmtc_traces, urll_traces, ctrl_traces]
             else:
                 datasets = [embb_traces, mmtc_traces, urll_traces]
@@ -37,7 +37,7 @@ def load_csv_traces(trials, data_path, data_type="singleUE_clean", norm_params=N
                         # print('Normalizing Col.', c, '-- Max', norm_params[ix]['max'], ', Min', norm_params[ix]['min'])
                         trace[c] = trace[c].map(lambda x: (x - norm_params[ix]['min']) / (norm_params[ix]['max'] - norm_params[ix]['min']))
 
-            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):  # TODO: remove the .csv check
                 trials_traces.append({'embb': embb_traces, 'mmtc': mmtc_traces, 'urll': urll_traces, 'ctrl': ctrl_traces})
             else:
                 trials_traces.append({'embb': embb_traces, 'mmtc': mmtc_traces, 'urll': urll_traces})
@@ -102,7 +102,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
             if cols_names is None:  # NOTE: assume Trials have all the same columns, we set only once
                 cols_names = cols_n
 
-            if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+            if isControlClass and not(trial_samples['ctrl']['traces'] == []):
                 all_input = np.concatenate((trial_samples['embb']['traces'],
                                             trial_samples['mmtc']['traces'],
                                             trial_samples['urll']['traces'],
@@ -137,7 +137,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
 
     # if we are using Timestamp, we need to convert them to relative Timestamps before converting everything to float32
     # because the Timestamp integer requires 64 bits to be represented correctly, otherwise it gets truncated
-    # TODO would it be better todo this relative to the whole trace rather than on a slice basis?
+    # TODO: would it be better todo this relative to the whole trace rather than on a slice basis?
     if cols_names[0] == 'Timestamp':
         for trial in trials_in:
             trial = np.stack([relative_timestamp(x) for x in trial])
@@ -266,7 +266,7 @@ def get_trace_singleUE(data_path, data_type, drop_colnames, isControlClass, mode
     isRaw = "_raw" in data_type
     ctrl_logs, embb_logs, mmtc_logs, urll_logs = load_csv_dataset__single(data_path, trial, isControlClass, isRaw)
     # stack together all data from all traffic class
-    if isControlClass and os.path.exists(os.path.join(data_path, os.path.join(trial, "null_clean.csv"))):
+    if isControlClass and len(ctrl_logs) > 0:
         datasets = [embb_logs, mmtc_logs, urll_logs, ctrl_logs]
     else:
         datasets = [embb_logs, mmtc_logs, urll_logs]
@@ -471,7 +471,10 @@ def load_csv_dataset__multi(data_path, trial, isControlClass=False):
                     label = "urll"
                 elif "embb" in trace_filename.lower():
                     label = "embb"
-                assert(label != '')
+
+                if label == '':
+                    print("[load_csv_dataset__multi] Unrecognized label or bad formatting.\n\t"+ trace_filename +"\nSkipping trace..")
+                    continue
 
                 ue_csv = os.path.join(m, ueID+"_metrics.csv")
                 ue_kpis = pd.read_csv(ue_csv, sep=",")
@@ -654,7 +657,6 @@ if __name__ == "__main__":
             dataset, cols_maxmin = gen_slice_dataset(trials, slice_len=args.slicelen, data_path=path,
                                                      mode=args.mode, data_type=data_type, check_zeros=args.check_zeros,
                                                      drop_colnames=args.drop_colnames)
-
             file_suffix = ''
             for t in trials:
                 file_suffix += t

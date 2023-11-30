@@ -109,8 +109,6 @@ def train_func(config: Dict):
     pos_enc = config['pos_enc']
     patience = config['patience'] # num of epochs tolerated without improvement in loss during training
 
-
-
     if not useRay:
         worker_batch_size = batch_size
     else:
