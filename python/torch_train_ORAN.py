@@ -188,7 +188,6 @@ def train_func(config: Dict):
                 f.write(f'Mean: {mean}, std: {sd}, num. epochs: {e+1}\n')
             return loss_results
     # return required for backwards compatibility with the old API
-    # TODO(team-ml) clean up and remove return
     return loss_results
 
 

@@ -106,6 +106,7 @@ if __name__ == "__main__":
 
         for ix, p in enumerate(pkl_list):
             kpis, class_out = pickle.load(open(p, 'rb'))
+
             """
             for k in classmap.keys():
                 if k in PATH:
@@ -153,11 +154,14 @@ if __name__ == "__main__":
         # if there's data in the buffer
         if len(output_list_kpi) > 0:
             # let's print the accumulated KPI inputs and relative outputs
-            imgout = np.array(output_list_kpi).T
+            imgout = np.array(output_list_kpi).T # TODO: are we sure the Transpose is doing the right thing??
             plot_trace_class(output_list_kpi, output_list_y, PATH, slice_len, head, save_plain_img=True)
             pickle.dump(np.array(output_list_kpi), open(
                 PATH + '/replay_kpis__' + os.path.basename(PATH) + 's' + str(head - len(output_list_kpi)) + '_e' + str(
                     head) + '.pkl', 'wb'))
+
+            # TODO count occurrences of each label
+
         """
         print('Correct % ', num_correct/len(pkl_list)*100)
         

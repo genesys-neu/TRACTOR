@@ -523,7 +523,8 @@ class ORANTracesDataset(Dataset):
         # if needed, relabel the CTRL samples based on computation on the
         # normalization parameters (or just compute it from the dataset)
         self.ctrl_label = 3
-        self.relabel_norm_threshold = relabel_norm_threshold
+        self.relabel_norm_threshold = min([self.norm_params['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        print("Mean CTRL Norm distance threshold: ", self.relabel_norm_threshold)
         self.relabeled = False
         if relabel_CTRL:
             self.relabel_ctrl_samples()
@@ -769,31 +770,56 @@ if __name__ == "__main__":
             common_normp['info']['mean_ctrl_sample'] = mean_ctrl_sample
             common_normp['info']['std_ctrl_sample'] = std_ctrl_sample
 
+            common_normp['info']['norm_dist'] = {}
+            x_axis = np.arange(0, 25, 0.01)
+
+            for cl in [0, 1, 2, 3]:
+                print("Difference of mean class ctrl (4) with class", cl)
+
+                all_sample = None
+                for ds, kpi_p, ds_path, kpi_p_path in datasets:
+                    for t in ['train', 'valid']:
+                        ixs_ctrl = ds[t]['labels'] == cl
+                        if torch.any(ixs_ctrl):
+                            if all_sample is None:
+                                all_sample = ds[t]['samples']['norm'][ixs_ctrl]
+                            else:
+                                all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+
+                norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2))
+                print("Mean norm", np.mean(norm), "Std.", np.std(norm))
+                common_normp['info']['norm_dist'][cl] = {'mean': np.mean(norm), 'std': np.std(norm)}
+
+            isPlot=True
             if isPlot:
                 import matplotlib.pyplot as plt
-                # compute euclidean distance between samples of other classes and mean ctrl sample
+            # compute euclidean distance between samples of other classes and mean ctrl sample
 
-                for cl in [0, 1, 2, 3]:
-                    print("Difference of mean class ctrl (4) with class", cl)
+            # set the threshold for probability of observing a ctrl message based on its norm distance from template
+            ctrl_distrib = normal.pdf(x_axis, common_normp['info']['norm_dist'][3]['mean'], common_normp['info']['norm_dist'][3]['std'])
+            if isPlot:
+                plt.plot(x_axis, ctrl_distrib, label='Class ' + str(3))
+            for cl in [0, 1, 2]:
+                this_mean, this_std = common_normp['info']['norm_dist'][cl]['mean'], common_normp['info']['norm_dist'][cl]['std']
+                this_distrib = normal.pdf(x_axis, this_mean, this_std)
+                thr_ix = np.where(ctrl_distrib < this_distrib)[0][0]
+                thr_val = x_axis[thr_ix]
+                common_normp['info']['norm_dist'][cl]['thr'] = thr_val # save threshold value
+                print("Threshold class ", cl, ":", thr_val)
+                if isPlot:
+                    plt.plot(x_axis, this_distrib, label='Class ' + str(cl))
 
-                    all_sample = None
-                    for ds, kpi_p, ds_path, kpi_p_path in datasets:
-                        for t in ['train', 'valid']:
-                            ixs_ctrl = ds[t]['labels'] == cl
-                            if torch.any(ixs_ctrl):
-                                if all_sample is None:
-                                    all_sample = ds[t]['samples']['norm'][ixs_ctrl]
-                                else:
-                                    all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+            # find min threshold
+            min_threshold = min([common_normp['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+            norm_threshold = min_threshold
 
+            if isPlot:
 
-                    norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2))
-                    print("Mean norm", np.mean(norm), "Std.", np.std(norm))
-                    x_axis = np.arange(0, 15, 0.01)
-                    plt.plot(x_axis, normal.pdf(x_axis, np.mean(norm), np.std(norm)), label='Class ' + str(cl))
                 plt.legend()
+                plt.axvline(x=min_threshold, ls='--', c='gray')
                 plt.show()
 
+            if isPlot:
                 plt.imshow(mean_ctrl_sample)
                 plt.colorbar()
                 plt.show()
@@ -819,6 +845,7 @@ if __name__ == "__main__":
             possible_ctrl_ixs = norm < norm_threshold # TODO this need to be changed to a dynamic threshold based on slice length and datasets combinations
             possible_ctrl_labels = all_labels_noctrl[possible_ctrl_ixs].numpy()
             unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
+            print("Unique labels", unique_labels, " count", unique_counts)
             if isPlot:
                 plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
                 plt.show()
