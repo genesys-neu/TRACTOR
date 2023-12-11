@@ -737,8 +737,10 @@ if __name__ == "__main__":
 
         # then let's create an alternative version of the datasets normalized with global paramters and save it in a separate file
         for ds, kpi_p, ds_path, kpi_p_path in datasets:
+            print('---- Normalizing Training set ----')
             trials_train_globalminmax = normalize_KPIs(common_normp, ds['train']['samples']['no_norm'].numpy())
             ds['train']['samples']['norm'] = torch.Tensor(trials_train_globalminmax)
+            print('---- Normalizing Validation set ----')
             trials_valid_globalminmax = normalize_KPIs(common_normp, ds['valid']['samples']['no_norm'].numpy())
             ds['valid']['samples']['norm'] = torch.Tensor(trials_valid_globalminmax)
             ds['info'] = {'global_norm_path': global_norm_path}

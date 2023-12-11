@@ -5,7 +5,7 @@
 
 #!/bin/bash
 
-sshpass -p "ChangeMe" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'raw' ../TRACTOR $3:/root/.
+sshpass -p "ChangeMe" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs/*UE/' --exclude 'utils/raw' --exclude 'raw' ../TRACTOR $3:/root/.
 sshpass -p "scope" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'model' ../TRACTOR $1:/root/.
 sshpass -p "scope" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'model' ../TRACTOR $2:/root/.
 

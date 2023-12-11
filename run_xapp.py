@@ -77,7 +77,7 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
         model.load_state_dict(torch.load(torch_model_path, map_location='cuda:0')['model_state_dict'])
     else:
         device = 'cpu'
-        model.load_state_dict(torch.load(torch_model_path)['model_state_dict'])
+        model.load_state_dict(torch.load(torch_model_path, map_location='cpu')['model_state_dict'])
     model.to(device)
     rand_x = torch.Tensor(np.random.random((1, slice_len, num_feats)))
     rand_x = rand_x.to(device)
@@ -170,21 +170,25 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
                     assert (np_kpi.shape[1] == len(list(map_feat2KPI.keys()))), "Check that filtered features has same size of mapped KPIs for normalization"
                     for f in range(np_kpi.shape[1]):
                         c = map_feat2KPI[f]
-                        logging.info('***** ' + colsparams[c]['name']+' ('+str(c)+') *****')
-                        logging.info('Un-normalized vector'+repr(np_kpi[:, f]))
+                        print('***** ' + colsparams[c]['name']+' ('+str(c)+') *****')
+                        if np.any(np_kpi[:, f] > colsparams[c]['max']) or np.any(np_kpi[:, f] < colsparams[c]['min']):
+                            print("Clipping ", colsparams[c]['min'], "< x <", colsparams[c]['max'])
+                            np_kpi[:, f] = np.clip(np_kpi[:, f], colsparams[c]['min'], colsparams[c]['max'])
+
+                        print('Un-normalized vector'+repr(np_kpi[:, f]))
                         np_kpi[:, f] = (np_kpi[:, f] - colsparams[c]['min']) / (
                                     colsparams[c]['max'] - colsparams[c]['min'])
-                        logging.info('Normalized vector: '+repr(np_kpi[:, f]))
+                        print('Normalized vector: '+repr(np_kpi[:, f]))
                     # and then pass it to our model as a torch tensor
                     t_kpi = torch.Tensor(np.expand_dims(np_kpi, axis=0)).to(device)
                     try:
                         pred = model(t_kpi)
                         this_class = pred.argmax(1)
-                        logging.info('Predicted class ' + str(pred.argmax(1)))
+                        print('Predicted class ' + str(pred.argmax(1)))
                         pickle.dump((np_kpi, this_class), open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
                         count_pkl += 1
                     except:
-                        logging.info('ERROR while predicting class')
+                        print('ERROR while predicting class')
 
                     # with open('/home/kpi_log.txt', 'a') as f:
                     #   f.write(str(np_kpi[:, :5]) + '\n')
@@ -197,7 +201,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", required=True, help="Path to TRACTOR model to load."  )
     parser.add_argument("--norm_param_path", required=True, default="", help="Normalization parameters path.")
-    parser.add_argument("--model_type", required=True, default="Tv1", choices=['CNN', 'Tv1', 'Tv2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
+    parser.add_argument("--model_type", default="Tv1", choices=['CNN', 'Tv1', 'Tv2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
     args, _ = parser.parse_known_args()
 
     if args.model_type is not None:
