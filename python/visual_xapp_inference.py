@@ -18,7 +18,7 @@ def natural_keys(text):
     return [ atoi(c) for c in re.split('(\d+)',text) ]
 
 import torch
-from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
+
 
 def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, save_plain_img=False, postfix='', colormap = {0: '#D97652', 1: '#56A662', 2: '#BF4E58', 3: '#8172B3'}, hatchmap = {0: '/', 1: '\\', 2: '//', 3: '.' }):
     imgout = np.array(output_list_kpi).T
@@ -121,6 +121,8 @@ if __name__ == "__main__":
     parser.add_argument("--Nclasses", default=4, help="Used to initialize the model")
     parser.add_argument("--chZeros", default=False, help="[Deprecated] At test time, don't count the occurrences of ctrl class")
     args, _ = parser.parse_known_args()
+
+    from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
 
     PATH = args.trace_path
     if PATH[-1] == '/':  # due to use of os.basename
