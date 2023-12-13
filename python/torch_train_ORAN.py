@@ -25,7 +25,7 @@ import sys
 sys.path.append(proj_root_dir)
 from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
 from vit_pytorch import ViT
-from visualize_inout import plot_trace_class
+from visual_xapp_inference import plot_trace_class
 
 #ds_train = ORANTracesDataset('train_in__Trial1_Trial2_Trial3.pkl', 'train_lbl__Trial1_Trial2_Trial3.pkl')
 #ds_test = ORANTracesDataset('valid_in__Trial1_Trial2_Trial3.pkl', 'valid_lbl__Trial1_Trial2_Trial3.pkl')
@@ -325,8 +325,9 @@ if __name__ == "__main__":
             transformer = TransformerNN_v2
         else:
             transformer = ViT
-
+    print("--- Loading Train dataset...")
     ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path, norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
+    print("--- Loading Validation dataset...")
     ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path,  norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
     ds_info = ds_train.info()
 
@@ -341,15 +342,9 @@ if __name__ == "__main__":
     include_KPI_ixs = [1] + [x for x in range(3, ds_train.obs_input.shape[-1])]    # exclude column 0 (Timestamp) and 2 (IMSI)
     normp = pickle.load(open(os.path.join(args.ds_path, args.norm_param_path), "rb"))
 
-    [print(i, ':', normp[c]['name']) for i, c in enumerate(include_KPI_ixs) if 'name' in normp[c].keys()]
+    #[print(i, ':', normp[c]['name']) for i, c in enumerate(include_KPI_ixs) if 'name' in normp[c].keys()]
 
-    """
-    if args.relabel_train:
-        ds_train.relabel_ctrl_samples()
-        ds_test.relabel_ctrl_samples()
-        print("--- DS INFO (after relabeling) ---")
-        print(ds_train.info())
-    """
+
     Nclass = ds_info['nclasses']
     train_config['Nclass'] = Nclass
     train_config['useRay'] = args.useRay

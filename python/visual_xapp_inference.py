@@ -77,19 +77,52 @@ def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0
         head) + postfix + '.png')
     plt.clf()
 
+
+def process_norm_params(all_feats_raw, norm_param_path):
+    all_feats = np.arange(0, all_feats_raw)
+    colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
+    if colsparam_dict[0] != 'Timestamp':
+        # consider the missing Timestamp feature in the normalization parameters
+        # by adjusting indexes of features to be removed.
+        exclude_param = [0] + [i + 1 for i in colsparam_dict['info']['exclude_cols_ix']]
+        # Also readjust the features keys in the dictionary
+        colsparams = {key + 1: value for key, value in colsparam_dict.items() if isinstance(key, int)}
+        colsparams[0] = {'name': 'Timestamp', 'max': None, 'min': None}
+    else:
+        exclude_param = colsparam_dict['info']['exclude_cols_ix']
+        colsparams = {key: value for key, value in colsparam_dict.items() if isinstance(key, int)}
+    indexes_to_keep = np.array([i for i in range(len(all_feats)) if i not in exclude_param])
+    # we obtain num of input features this from the normalization/relabeling info
+    num_feats = len(indexes_to_keep)
+    slice_len = colsparam_dict['info']['mean_ctrl_sample'].shape[0]
+    # create a map from indexes after features/KPIs filtering and original feature index
+    # to retrieve normalization parameters
+    map_feat2KPI = dict(zip(np.arange(0, len(indexes_to_keep)), indexes_to_keep))
+    print("INFO:\n",
+          "\tSlice len. (T) =", slice_len, "\tNum. Feats (K)=", num_feats, "\n",
+          "\tIndexes to be kept:", repr(indexes_to_keep), "\n",
+          "\tIndexes to be excluded:", repr(exclude_param), "\n",
+          "\tFeature-to-KPI map", repr(map_feat2KPI), "\n",
+          "Column params for normalization:\n", repr(colsparams)
+          )
+    return colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", required=True, help="Path containing the classifier output files for re-played traffic traces")
+    parser.add_argument("--trace_path", required=True, help="Path containing the classifier output files for re-played traffic traces")
     parser.add_argument("--mode", choices=['pre-comp', 'inference'], default='pre-comp', help="Specify the type of file format we are trying to read.")
     parser.add_argument("--slicelen", choices=[4, 8, 16, 32, 64], type=int, default=32, help="Specify the slicelen to determine the classifier to load")
-    parser.add_argument("--model", default='../model/model.32.cnn.pt', help="Specify the Torch model to load" )
+    parser.add_argument("--model_path", help="Path to TRACTOR model to load."  )
+    parser.add_argument("--norm_param_path", default="", help="Normalization parameters path.")
+    parser.add_argument("--model_type", default="Tv1", choices=['CNN', 'Tv1', 'Tv2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
     parser.add_argument("--Nclasses", default=4, help="Used to initialize the model")
-    parser.add_argument("--chZeros", default=False, help="At test time, don't count the occurrences of ctrl class")
+    parser.add_argument("--chZeros", default=False, help="[Deprecated] At test time, don't count the occurrences of ctrl class")
     args, _ = parser.parse_known_args()
 
-    PATH = args.path
+    PATH = args.trace_path
     if PATH[-1] == '/':  # due to use of os.basename
         PATH = PATH[:-1]
 
@@ -190,21 +223,59 @@ if __name__ == "__main__":
         """
 
     elif args.mode == 'inference':
+        pos_enc = False  # not supported at the moment
 
-        if 'cnn' in args.model:
-            global_model = ConvNN
+        if args.model_type is not None:
+            if args.model_type == 'Tv1':
+                model_type = TransformerNN
+            elif args.model_type == 'Tv2':
+                model_type = TransformerNN_v2
+            elif args.model_type == 'ViT':
+                # transformer = ViT
+                print("Transformer type " + args.transformer + " is not yet supported.")
+                exit(-1)
+            elif args.model_type == 'CNN':
+                model_type = ConvNN
+
+        torch_model_path = args.model_path
+        norm_param_path = args.norm_param_path
+
+        Nclass = args.Nclasses
+        all_feats_raw = 31
+        colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len = process_norm_params(all_feats_raw,
+                                                                                              norm_param_path)
+
+        # initialize the KPI matrix
+        kpi = []
+        last_timestamp = 0
+        curr_timestamp = 0
+
+        # initialize the ML model
+        print('Init ML model...')
+        if model_type in [TransformerNN, TransformerNN_v2]:
+            model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1,
+                               custom_enc=True)
+        elif model_type == ConvNN:
+            model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
         else:
-            global_model = TransformerNN
+            # TODO
+            print("ViT/other model is not yet supported. Aborting.")
+            exit(-1)
 
-        device = torch.device("cuda")
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            model.load_state_dict(torch.load(torch_model_path, map_location='cuda:0')['model_state_dict'])
+        else:
+            device = 'cpu'
+            model.load_state_dict(torch.load(torch_model_path, map_location='cpu')['model_state_dict'])
+        model.to(device)
+        model.eval()
+
 
         pkl_list = glob.glob(os.path.join(PATH, 'replay*.pkl'))
         for ix, p in enumerate(pkl_list):
             kpis = pickle.load(open(p, 'rb'))
-            model = global_model(classes=args.Nclasses, slice_len=args.slicelen, num_feats=kpis.shape[1])
-            model.load_state_dict(torch.load(args.model, map_location='cuda:0')['model_state_dict'])
-            model.to(device)
-            model.eval()
+
             output_list_y = []
             if 'embb' in os.path.basename(p):
                 correct_class = classmap['embb']

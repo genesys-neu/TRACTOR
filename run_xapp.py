@@ -5,6 +5,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from python.ORAN_dataset import *
 from python.ORAN_models import *
+from python.visual_xapp_inference import process_norm_params
 #from vit_pytorch import ViT
 import time
 from xapp_control import *
@@ -24,36 +25,9 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
     control_sck = open_control_socket(4200)
 
     pos_enc = False # not supported at the moment
-    all_feats = np.arange(0, all_feats_raw)
-    colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
-    if colsparam_dict[0] != 'Timestamp':
-        # consider the missing Timestamp feature in the normalization parameters
-        # by adjusting indexes of features to be removed.
-        exclude_param = [0] + [i + 1 for i in colsparam_dict['info']['exclude_cols_ix']]
-        # Also readjust the features keys in the dictionary
-        colsparams = {key + 1: value for key, value in colsparam_dict.items() if isinstance(key, int)}
-        colsparams[0] = {'name': 'Timestamp', 'max': None, 'min': None}
-    else:
-        exclude_param = colsparam_dict['info']['exclude_cols_ix']
-        colsparams = {key: value for key, value in colsparam_dict.items() if isinstance(key, int)}
 
-    indexes_to_keep = np.array([i for i in range(len(all_feats)) if i not in exclude_param])
-    # we obtain num of input features this from the normalization/relabeling info
-    num_feats = len(indexes_to_keep)
-    slice_len = colsparam_dict['info']['mean_ctrl_sample'].shape[0]
-    # create a map from indexes after features/KPIs filtering and original feature index
-    # to retrieve normalization parameters
-    map_feat2KPI = dict(zip(np.arange(0, len(indexes_to_keep)), indexes_to_keep))
-
-    print("INFO:\n",
-          "\tSlice len. (T) =", slice_len, "\tNum. Feats (K)=", num_feats, "\n",
-          "\tIndexes to be kept:", repr(indexes_to_keep),"\n",
-          "\tIndexes to be excluded:", repr(exclude_param),"\n",
-          "\tFeature-to-KPI map", repr(map_feat2KPI), "\n",
-          "Column params for normalization:\n", repr(colsparams)
-          )
-
-
+    colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len = process_norm_params(all_feats_raw,
+                                                                                          norm_param_path)
 
     # initialize the KPI matrix
     kpi = []
@@ -79,6 +53,7 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
         device = 'cpu'
         model.load_state_dict(torch.load(torch_model_path, map_location='cpu')['model_state_dict'])
     model.to(device)
+    model.eval()
     rand_x = torch.Tensor(np.random.random((1, slice_len, num_feats)))
     rand_x = rand_x.to(device)
     pred = model(rand_x)
@@ -192,6 +167,7 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
 
                     # with open('/home/kpi_log.txt', 'a') as f:
                     #   f.write(str(np_kpi[:, :5]) + '\n')
+
 
 
 

@@ -559,7 +559,7 @@ class ORANTracesDataset(Dataset):
                 include_ixs.remove(k)
 
         mean_ctrl_sample = self.norm_params['info']['mean_ctrl_sample']
-
+        assert mean_ctrl_sample.shape[-1] == len(include_ixs), "Check that features size is the same"
 
         # compute euclidean distance between samples of other classes and mean ctrl sample
         obs_excludecols = self.obs_input[:, :, list(include_ixs)]
@@ -571,14 +571,19 @@ class ORANTracesDataset(Dataset):
         # and every samples of every other class
         possible_ctrl_ixs = norm < self.relabel_norm_threshold
         possible_ctrl_labels = self.obs_labels[possible_ctrl_ixs]
+        pre_unique_lbls, pre_unique_cnts = np.unique(self.obs_labels, return_counts=True)
+        print("Initial # samps. per label (before relabeling)\n\t Labels:", pre_unique_lbls, "Count:", pre_unique_cnts)
         unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
-        print("Num of relabel per class:", unique_counts)
+        print("\tLabels that contain norm < threshold", unique_labels, "\n\tNum of samples per label with norm < threshold:", unique_counts)
         #plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
         #plt.show()
+        count_relabel = 0
         for ix, isPossibleCTRL in enumerate(possible_ctrl_ixs):
             if isPossibleCTRL and self.obs_labels[ix] != self.ctrl_label:
                 #print(ix, self.obs_labels[ix], '-> 3')
                 self.obs_labels[ix] = self.ctrl_label
+                count_relabel += 1
+        print("Tot. samples relabeled (for every class):", count_relabel)
 
         #possible_ctrl_labels = self.obs_labels[possible_ctrl_ixs].numpy()
 
@@ -641,7 +646,7 @@ if __name__ == "__main__":
     parser.add_argument("--already_gen", action='store_true', default=False, help="[DEBUG] Use this flag for pre-generated dataset(s) that are only needed to compute new statistics.")
     args, _ = parser.parse_known_args()
 
-    from visualize_inout import classmap
+    from visual_xapp_inference import classmap
 
     path = args.ds_path
     trials = args.trials
