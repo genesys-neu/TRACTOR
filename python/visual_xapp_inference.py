@@ -138,7 +138,12 @@ if __name__ == "__main__":
         pkl_list.sort(key=natural_keys)
 
         for ix, p in enumerate(pkl_list):
-            kpis, class_out = pickle.load(open(p, 'rb'))
+            TRACTOR_inout = pickle.load(open(p, 'rb'))
+
+            kpis = TRACTOR_inout['input']
+            kpis_raw = TRACTOR_inout['input_raw']
+            class_out = TRACTOR_inout['label']
+
 
             """
             for k in classmap.keys():

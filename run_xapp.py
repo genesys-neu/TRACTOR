@@ -127,6 +127,7 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
             curr_timestamp = kpi_new[0] # first feature is timestamp
 
             if curr_timestamp > last_timestamp:
+                kpi_raw = kpi_new.copy()
                 # let's remove the KPIs we don't need
                 kpi_filt = kpi_new[indexes_to_keep]
                 last_timestamp = curr_timestamp
@@ -160,7 +161,7 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
                         pred = model(t_kpi)
                         this_class = pred.argmax(1)
                         print('Predicted class ' + str(pred.argmax(1)))
-                        pickle.dump((np_kpi, this_class), open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
+                        pickle.dump({'input': np_kpi, 'label': this_class, 'input_raw': kpi_raw}, open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
                         count_pkl += 1
                     except:
                         print('ERROR while predicting class')
