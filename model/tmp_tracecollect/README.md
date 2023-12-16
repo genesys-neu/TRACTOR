@@ -1,0 +1,1 @@
+This model is used to perform data collection using new code developed for TRACTOR xApp. Note that this is not the best performing model, but it contains a model compatible with the new training/deploymenet pipeline. 
