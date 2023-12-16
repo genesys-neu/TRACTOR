@@ -11,7 +11,7 @@ out_dir=${1%.*}
 num=1010123456002
 
 echo "using $1, results will be saved in ./$out_dir"
-sleep 2
+sleep 10
 mkdir $out_dir
 
 read -r gnb < $1
@@ -26,13 +26,13 @@ while IFS= read -r line; do
     sshpass -p "scope" ssh $line "cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf" &
     sshpass -p "scope" rsync -av ../raw $line:/root/traffic_gen/
 
-    sleep 3
+    sleep 5
 done < $1
 
-sleep 5
+sleep 30
 clear -x
 echo "Configured all SRNs"
-sleep 5
+sleep 30
 
 while IFS= read -r line; do
     if [ $line != $gnb ]
@@ -53,12 +53,12 @@ while IFS= read -r line; do
     	eNB_PORT=$((eNB_PORT+1))
     	UE_PORT=$((UE_PORT+1))
     	num=$((num+1))
-    	sleep 1
+    	sleep 5
     fi
 done < $1
 
 #wait
-sleep 1800
+sleep 650
 
 sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./$out_dir/
 
