@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+from ORAN_dataset import normalize_KPIs
+
 classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
 colormap = {0: '#D97652', 1: '#56A662', 2: '#BF4E58', 3: '#8172B3'}
 hatchmap = {0: '/', 1: '\\', 2: '//', 3: '.' }
@@ -78,9 +80,8 @@ def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0
     plt.clf()
 
 
-def process_norm_params(all_feats_raw, norm_param_path):
+def process_norm_params(all_feats_raw, colsparam_dict):
     all_feats = np.arange(0, all_feats_raw)
-    colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
     if colsparam_dict[0] != 'Timestamp':
         # consider the missing Timestamp feature in the normalization parameters
         # by adjusting indexes of features to be removed.
@@ -105,7 +106,7 @@ def process_norm_params(all_feats_raw, norm_param_path):
           "\tFeature-to-KPI map", repr(map_feat2KPI), "\n",
           "Column params for normalization:\n", repr(colsparams)
           )
-    return colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len
+    return colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len, colsparam_dict['info']['mean_ctrl_sample']
 
 
 if __name__ == "__main__":
@@ -119,7 +120,9 @@ if __name__ == "__main__":
     parser.add_argument("--norm_param_path", default="", help="Normalization parameters path.")
     parser.add_argument("--model_type", default="Tv1", choices=['CNN', 'Tv1', 'Tv2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
     parser.add_argument("--Nclasses", default=4, help="Used to initialize the model")
-    parser.add_argument("--chZeros", default=False, help="[Deprecated] At test time, don't count the occurrences of ctrl class")
+    parser.add_argument("--CTRLcheck", action='store_true', default=False, help="At test time (inference), it will compare the sample with CTRL template to determine if its a correct CTRL sample")
+    parser.add_argument("--chZeros", action='store_true', default=False, help="[Deprecated] At test time, don't count the occurrences of ctrl class")
+
     args, _ = parser.parse_known_args()
 
     from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
@@ -129,10 +132,12 @@ if __name__ == "__main__":
         PATH = PATH[:-1]
 
     check_zeros = args.chZeros
+    check_ctrl_tpl = args.CTRLcheck
 
     if args.mode == 'pre-comp':
         slice_len = args.slicelen
         output_list_kpi = []
+        output_list_kpi_raw = []
         output_list_y = []
         head = 0
 
@@ -143,9 +148,10 @@ if __name__ == "__main__":
             TRACTOR_inout = pickle.load(open(p, 'rb'))
 
             kpis = TRACTOR_inout['input']
-            kpis_raw = TRACTOR_inout['input_raw']
             class_out = TRACTOR_inout['label']
 
+            # construct raw input (note, we have to skip the first T - 1 samples
+            kpis_raw = TRACTOR_inout['input_raw']
 
             """
             for k in classmap.keys():
@@ -164,39 +170,47 @@ if __name__ == "__main__":
             """
 
             if ix == 0:
-                old_kpis = kpis.copy()
-                for i in range(slice_len):
+                old_kpis = kpis.copy()  # dim: [slice_len, num_feats]
+                old_kpis_raw = kpis_raw.copy() # dim: [num_feats_raw,]
+                for i in range(slice_len):  # add samples for all T
                     output_list_kpi.append(kpis[i,:])
+
+                output_list_kpi_raw.append(kpis_raw[np.newaxis, :]) # add single RAW line (TODO atm we only have saved it like this)
                 head = len(output_list_kpi)
             elif ix > 0:
                 if np.all(kpis[0:slice_len-1, :] == old_kpis[1:slice_len, :]):
                     print('Kpis', ix, ' contiguous')
-                    output_list_kpi.append(kpis[-1, :])
+                    output_list_kpi.append(kpis[-1, :]) # add only the last element to visualization output
+                    output_list_kpi_raw.append(kpis_raw[np.newaxis, :]) # add the current KPI (TODO note that there is a +T offset atm)
                     head += 1
                 else:
                     print('Kpis', ix, 'NOT contiguous')
                     # first, let's plot everything until now and empty the output buffer
                     plot_trace_class(output_list_kpi, output_list_y, PATH, slice_len, head, save_plain_img=True)
-                    pickle.dump(np.array(output_list_kpi), open(PATH+'/replay_kpis__'+ os.path.basename(PATH) + 's' + str(head - len(output_list_kpi)) + '_e' + str(
-            head) +'.pkl', 'wb'))
+                    pickle.dump({'input_trace': np.array(output_list_kpi), 'raw_trace': np.array(output_list_kpi_raw)}, open(PATH+'/replay_kpis__'+ os.path.basename(PATH) + 's' +
+                                str(head - len(output_list_kpi)) + '_e' + str(head) +'.pkl', 'wb'))
                     # reset output lists
                     output_list_kpi = []
+                    output_list_kpi_raw = []
                     output_list_y = []
 
                     for i in range(slice_len):
                         output_list_kpi.append(kpis[i, :])
+
+                    output_list_kpi_raw.append(kpis_raw[np.newaxis, :])
                     head += len(output_list_kpi)
 
                 old_kpis = kpis.copy()
+                old_kpis_raw = kpis_raw.copy()
 
             output_list_y.append(class_out)
 
         # if there's data in the buffer
-        if len(output_list_kpi) > 0:
+        if len(output_list_kpi) > 0 and len(output_list_kpi_raw) > 0:
             # let's print the accumulated KPI inputs and relative outputs
             imgout = np.array(output_list_kpi).T # TODO: are we sure the Transpose is doing the right thing??
             plot_trace_class(output_list_kpi, output_list_y, PATH, slice_len, head, save_plain_img=True)
-            pickle.dump(np.array(output_list_kpi), open(
+            pickle.dump({'input_trace': np.array(output_list_kpi), 'raw_trace': np.array(output_list_kpi_raw)}, open(
                 PATH + '/replay_kpis__' + os.path.basename(PATH) + 's' + str(head - len(output_list_kpi)) + '_e' + str(
                     head) + '.pkl', 'wb'))
 
@@ -249,8 +263,15 @@ if __name__ == "__main__":
 
         Nclass = args.Nclasses
         all_feats_raw = 31
-        colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len = process_norm_params(all_feats_raw,
-                                                                                              norm_param_path)
+
+        colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
+        relabel_norm_threshold = min([colsparam_dict['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        (colsparams,
+         indexes_to_keep,
+         map_feat2KPI,
+         num_feats,
+         slice_len,
+         mean_ctrl_sample) = process_norm_params(all_feats_raw, colsparam_dict)
 
         # initialize the KPI matrix
         kpi = []
@@ -281,7 +302,10 @@ if __name__ == "__main__":
 
         pkl_list = glob.glob(os.path.join(PATH, 'replay*.pkl'))
         for ix, p in enumerate(pkl_list):
-            kpis = pickle.load(open(p, 'rb'))
+            replay_trace_dict = pickle.load(open(p, 'rb'))
+
+            kpis = replay_trace_dict['input_trace']
+            kpis_raw = replay_trace_dict['raw_trace']
 
             output_list_y = []
             if 'embb' in os.path.basename(p):
@@ -297,10 +321,27 @@ if __name__ == "__main__":
             num_samples = 0
             num_verified_ctrl = 0
             num_heuristic_ctrl = 0
-            for t in range(kpis.shape[0]):
-                if t + args.slicelen < kpis.shape[0]:
-                    input_sample = kpis[t:t + args.slicelen]
-                    input = torch.Tensor(input_sample[np.newaxis, :, :])
+            filt_kpi_offset = slice_len # momentarily... we skip the first 16 samples
+            for t in range(kpis_raw.shape[0]):  # iterate over the size of raw kpis and account for the offset of filtered ones
+                #print('kpis_raw[',t,']')
+                if t + args.slicelen < kpis_raw.shape[0]:
+                    input_sample = kpis[t+filt_kpi_offset:t+filt_kpi_offset + args.slicelen]
+                    input_sample_raw = np.squeeze( kpis_raw[t:t + args.slicelen] )
+                    kpi_filt = input_sample_raw[:,indexes_to_keep]
+
+                    for f in range(kpi_filt.shape[1]):
+                        c = map_feat2KPI[f]
+                        # print('***** ' + colsparams[c]['name']+' ('+str(c)+') *****')
+                        if np.any(kpi_filt[:, f] > colsparams[c]['max']) or np.any(kpi_filt[:, f] < colsparams[c]['min']):
+                            # print("Clipping ", colsparams[c]['min'], "< x <", colsparams[c]['max'])
+                            kpi_filt[:, f] = np.clip(kpi_filt[:, f], colsparams[c]['min'], colsparams[c]['max'])
+
+                        # print('Un-normalized vector'+repr(kpi_filt[:, f]))
+                        kpi_filt[:, f] = (kpi_filt[:, f] - colsparams[c]['min']) / (
+                                    colsparams[c]['max'] - colsparams[c]['min'])
+                        # print('Normalized vector: '+repr(kpi_filt[:, f]))
+
+                    input = torch.Tensor(kpi_filt[np.newaxis, :, :])
                     input = input.to(device)  # transfer input data to GPU
                     pred = model(input)
                     class_ix = pred.argmax(1)
@@ -314,19 +355,56 @@ if __name__ == "__main__":
                                 num_verified_ctrl += 1  #  classifier and heuristic for control traffic agrees
                                 continue #skip this sample
 
+                    elif check_ctrl_tpl:
+
+                        # exclude column 0 (Timestamp) and 2 (IMSI)
+                        # NOTE: at this point, we still have all KPIs (unfiltered) in mean_ctrl_sample
+                        include_ixs = set(range(all_feats_raw-1)) if colsparam_dict[0] != 'Timestamp' else set(range(all_feats_raw))
+                        remove_cols = ['Timestamp', 'IMSI']
+                        for k, v in colsparam_dict.items():
+                            if isinstance(k, int) and v['name'] in remove_cols:
+                                include_ixs.remove(k)
+
+                        assert mean_ctrl_sample.shape[-1] == len(include_ixs), "Check that features size is the same"
+                        if colsparam_dict[0] != 'Timestamp':
+                            input_sample_raw = input_sample_raw[:, 1:]  # remove the first column (Timestamp)
+
+                        input_sample_raw_norm = normalize_KPIs(columns_maxmin=colsparam_dict, trials_in=input_sample_raw[np.newaxis,:])
+                        # compute Euclidean distance between samples of other classes and mean ctrl sample
+                        obs_excludecols = np.squeeze(input_sample_raw_norm)[:, list(include_ixs)]
+                        norm = np.linalg.norm(obs_excludecols - np.array(mean_ctrl_sample))
+                        # here we measure the norm (i.e. Euclidean distance) with mean_ctrl_sample is less than a given
+                        # threshold, which should correspond to CTRL (i.e. silent) traffic portions. Note that the lower the threshold,
+                        # the more conservative is the relabeling. This threshold is computed based on the distribution of euclidean
+                        # distances computed between the mean CTRL sample (assuming they look very similar)
+                        # and every sample of every other class
+                        if norm < relabel_norm_threshold:
+                            num_heuristic_ctrl += 1
+                            # plt.imshow(obs_excludecols)
+                            # plt.title("Pred: "+str(co))
+                            # plt.colorbar()
+                            # plt.show()
+                            if co == classmap['ctrl']:
+                                num_verified_ctrl += 1  # classifier and heuristic for control traffic agrees
+                                continue  # skip this sample
+
                     num_correct += 1 if (co == correct_class) else 0
                     num_samples += 1
 
-            mypost = '_cnn_' if isinstance(model, ConvNN) else '_trans_'
-            mypost += '_slice' + str(args.slicelen)
-            mypost += '_chZero' if check_zeros else ''
-            mypost += '_whitebg'
-            plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True, hatchmap=None)
-            mypost += '_hatch'
-            plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True)
-            print("Correct classification for traffic type (%): ", (num_correct / num_samples)*100., "num correct =", num_correct, ", num classifications =", num_samples)
+            if num_samples > 0:
+                mypost = '_cnn_' if isinstance(model, ConvNN) else '_trans_'
+                mypost += '_slice' + str(args.slicelen)
+                mypost += '_chZero' if check_zeros else ''
+                mypost += '_whitebg'
+                # TODO we should use kpis_raw instead of kpis, but not working right now... need to fix visualization for inference
+                plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True, hatchmap=None)
+                mypost += '_hatch'
+                # TODO we should use kpis_raw instead of kpis, but not working right now... need to fix visualization for inference
+                plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True)
 
-            if check_zeros:
+                print("Correct classification for traffic type (%): ", (num_correct / num_samples)*100., "num correct =", num_correct, ", num classifications =", num_samples)
+
+            if check_zeros or check_ctrl_tpl:
                 unique, counts = np.unique(output_list_y, return_counts=True)
                 count_class = dict(zip(unique, counts))
                 print(count_class)

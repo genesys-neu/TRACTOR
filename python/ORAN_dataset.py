@@ -102,7 +102,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
             if cols_names is None:  # NOTE: assume Trials have all the same columns, we set only once
                 cols_names = cols_n
 
-            if isControlClass and not(trial_samples['ctrl']['traces'] == []):
+            if isControlClass and not(len(trial_samples['ctrl']['traces']) == 0):
                 all_input = np.concatenate((trial_samples['embb']['traces'],
                                             trial_samples['mmtc']['traces'],
                                             trial_samples['urll']['traces'],
@@ -373,7 +373,7 @@ def extract_max_min_values(cols_names, trials_in):
         columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
     return columns_maxmin
 
-def normalize_KPIs(columns_maxmin, trials_in):
+def normalize_KPIs(columns_maxmin, trials_in, doPrint=False):
     trials_in_norm = trials_in.copy()
     for c, max_min_info in columns_maxmin.items():
         if isinstance(c, int):
@@ -381,12 +381,14 @@ def normalize_KPIs(columns_maxmin, trials_in):
                 col_max = max_min_info['max']
                 col_min = max_min_info['min']
                 if not (col_max == col_min):
-                    print('Normalizing Col.', max_min_info['name'], '[', c, '] -- Max', col_max, ', Min', col_min)
+                    if doPrint:
+                        print('Normalizing Col.', max_min_info['name'], '[', c, '] -- Max', col_max, ', Min', col_min)
                     trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
                 else:
                     trials_in_norm[:, :, c] = 0  # set all data as zero (we don't need this info cause it never changes)
             else:
-                print('Skipping normalization of Col. ', max_min_info['name'])
+                if doPrint:
+                    print('Skipping normalization of Col. ', max_min_info['name'])
 
     return trials_in_norm
 
@@ -430,7 +432,7 @@ def load_csv_dataset__single(data_path, trial, isControlClass=True, isRaw=False)
     if isControlClass and len(clean_files) > 0:
         ctrl_traces = [pd.read_csv(f, sep=",").dropna(how='all', axis='columns') for f in clean_files]
     else:
-        ctrl_traces = None
+        ctrl_traces = []
 
 
     # drop specific columns
@@ -552,6 +554,7 @@ class ORANTracesDataset(Dataset):
         assert 'mean_ctrl_sample' in self.norm_params['info'].keys(), "Normalization parameters need to have the mean_ctrl_sample pre-computed"
 
         # exclude column 0 (Timestamp) and 2 (IMSI)
+        # NOTE: at this point, we still have all KPIs (unfiltered) in self.obs_input
         include_ixs = set(range(self.obs_input.shape[-1]))
         remove_cols = ['Timestamp', 'IMSI']
         for k, v in self.norm_params.items():
@@ -564,11 +567,11 @@ class ORANTracesDataset(Dataset):
         # compute euclidean distance between samples of other classes and mean ctrl sample
         obs_excludecols = self.obs_input[:, :, list(include_ixs)]
         norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
-        # here we get the indexes for all samples that have a norm (i.e. euclidean distance) less than a given
+        # here we get the indexes for all samples that have a norm (i.e. Euclidean distance) less than a given
         # threshold, which should correspond to CTRL (i.e. silent) traffic portions. Note that the lower the threshold,
         # the more conservative is the relabeling. This threshold is computed based on the distribution of euclidean
         # distances computed between the mean CTRL sample (assuming they look very similar)
-        # and every samples of every other class
+        # and every sample of every other class
         possible_ctrl_ixs = norm < self.relabel_norm_threshold
         possible_ctrl_labels = self.obs_labels[possible_ctrl_ixs]
         pre_unique_lbls, pre_unique_cnts = np.unique(self.obs_labels, return_counts=True)
@@ -653,7 +656,7 @@ if __name__ == "__main__":
     trials_multi = args.trials_multi
     ctrl_class = 3
     isPlot = False
-    norm_threshold = 2.5
+    norm_threshold = None
 
     datasets = []
 
@@ -710,152 +713,150 @@ if __name__ == "__main__":
 
             datasets.append((dataset, cols_maxmin, dataset_path, norm_param_path))
 
-
     # if multiple data types (i.e. singleUE, multiUE) have been processed,
     # let's define a common set of normalization/sanitization parameters
-    if len(args.data_type) > 1:
 
-        # first, let's find a common set of columns to keep (i.e. the ones that have varying values)
-        # and their common min max parameters for normalization
-        common_normp = {}
-        novar_keys = []
-        common_keys = set()
-        [common_keys.update(set(list(kpi_p.keys()))) for _, kpi_p, _, _ in datasets]
+    # first, let's find a common set of columns to keep (i.e. the ones that have varying values)
+    # and their common min max parameters for normalization
+    common_normp = {}
+    novar_keys = []
+    common_keys = set()
+    [common_keys.update(set(list(kpi_p.keys()))) for _, kpi_p, _, _ in datasets]
 
-        for k in common_keys:   # for each common key/kpi feature
-            # verify that the name for the same key is the same
-            first_ds_kpiname = datasets[0][1][k]['name']
-            assert all([kpi_p[k]['name'] == first_ds_kpiname for _, kpi_p, _, _ in datasets]), 'check that kpis and names have the same order'
-            # obtain the overall max/min values
-            common_normp[k] = {
-                'name': first_ds_kpiname,
-                'max': max([kpi_p[k]['max'] for _, kpi_p, _, _ in datasets]),     # get max of maxes in that specific key/feature
-                'min': min([kpi_p[k]['min'] for _, kpi_p, _, _ in datasets])      # get min of mins in that specific key/feature
-            }
-            # annotate the features indexes that needs to be dropped when re-normalizing and sanitizing the data
-            if common_normp[k]['max'] == common_normp[k]['min']:
-                novar_keys.append(k)
+    for k in common_keys:   # for each common key/kpi feature
+        # verify that the name for the same key is the same
+        first_ds_kpiname = datasets[0][1][k]['name']
+        assert all([kpi_p[k]['name'] == first_ds_kpiname for _, kpi_p, _, _ in datasets]), 'check that kpis and names have the same order'
+        # obtain the overall max/min values
+        common_normp[k] = {
+            'name': first_ds_kpiname,
+            'max': max([kpi_p[k]['max'] for _, kpi_p, _, _ in datasets]),     # get max of maxes in that specific key/feature
+            'min': min([kpi_p[k]['min'] for _, kpi_p, _, _ in datasets])      # get min of mins in that specific key/feature
+        }
+        # annotate the features indexes that needs to be dropped when re-normalizing and sanitizing the data
+        if common_normp[k]['max'] == common_normp[k]['min']:
+            novar_keys.append(k)
 
-        common_normp['info'] = {'exclude_cols_ix': novar_keys}
-        filemarker = '__' + args.filemarker if args.filemarker else ''
-        global_norm_path = os.path.join(path, 'global__cols_maxmin'+filemarker+'_slice'+str(args.slicelen)+'.pkl')
+    common_normp['info'] = {'exclude_cols_ix': novar_keys}
+    filemarker = '__' + args.filemarker if args.filemarker else ''
+    global_norm_path = os.path.join(path, 'global__cols_maxmin'+filemarker+'_slice'+str(args.slicelen)+'.pkl')
 
-        # then let's create an alternative version of the datasets normalized with global paramters and save it in a separate file
-        for ds, kpi_p, ds_path, kpi_p_path in datasets:
-            print('---- Normalizing Training set ----')
-            trials_train_globalminmax = normalize_KPIs(common_normp, ds['train']['samples']['no_norm'].numpy())
-            ds['train']['samples']['norm'] = torch.Tensor(trials_train_globalminmax)
-            print('---- Normalizing Validation set ----')
-            trials_valid_globalminmax = normalize_KPIs(common_normp, ds['valid']['samples']['no_norm'].numpy())
-            ds['valid']['samples']['norm'] = torch.Tensor(trials_valid_globalminmax)
-            ds['info'] = {'global_norm_path': global_norm_path}
-            safe_pickle_dump(os.path.splitext(ds_path)[0] + "__globalnorm.pkl", ds)
+    # then let's create an alternative version of the datasets normalized with global paramters and save it in a separate file
+    for ds, kpi_p, ds_path, kpi_p_path in datasets:
+        print('---- Normalizing Training set ----')
+        trials_train_globalminmax = normalize_KPIs(common_normp, ds['train']['samples']['no_norm'].numpy())
+        ds['train']['samples']['norm'] = torch.Tensor(trials_train_globalminmax)
+        print('---- Normalizing Validation set ----')
+        trials_valid_globalminmax = normalize_KPIs(common_normp, ds['valid']['samples']['no_norm'].numpy())
+        ds['valid']['samples']['norm'] = torch.Tensor(trials_valid_globalminmax)
+        ds['info'] = {'global_norm_path': global_norm_path}
+        safe_pickle_dump(os.path.splitext(ds_path)[0] + "__globalnorm.pkl", ds)
 
-        # second, let's compute an average CTRL traffic template to be used across multiple datasets
-        # IMPORTANT: we have to use also the validation set for this and after the new normalization
-        all_ctrl = None
-        for ds, kpi_p, ds_path, kpi_p_path in datasets:
-            for t in ['train', 'valid']:
-                ixs_ctrl = ds[t]['labels'] == ctrl_class
-                if torch.any(ixs_ctrl):
-                    if all_ctrl is None:
-                        all_ctrl = ds[t]['samples']['norm'][ixs_ctrl]
-                    else:
-                        all_ctrl = torch.cat((all_ctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+    # second, let's compute an average CTRL traffic template to be used across multiple datasets
+    # IMPORTANT: we have to use also the validation set for this and after the new normalization
+    all_ctrl = None
+    for ds, kpi_p, ds_path, kpi_p_path in datasets:
+        for t in ['train', 'valid']:
+            ixs_ctrl = ds[t]['labels'] == ctrl_class
+            if torch.any(ixs_ctrl):
+                if all_ctrl is None:
+                    all_ctrl = ds[t]['samples']['norm'][ixs_ctrl]
+                else:
+                    all_ctrl = torch.cat((all_ctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
 
-        # exclude column 0 (Timestamp) and 2 (IMSI)
-        include_ixs = set(range(datasets[0][0]['train']['samples']['norm'].shape[-1]))
-        remove_cols = ['Timestamp', 'IMSI']
-        for k, v in common_normp.items():
-            if isinstance(k, int) and (v['name'] in remove_cols):
-                include_ixs.remove(k)
+    # exclude column 0 (Timestamp) and 2 (IMSI)
+    include_ixs = set(range(datasets[0][0]['train']['samples']['norm'].shape[-1]))
+    remove_cols = ['Timestamp', 'IMSI']
+    for k, v in common_normp.items():
+        if isinstance(k, int) and (v['name'] in remove_cols):
+            include_ixs.remove(k)
 
-        if (not (all_ctrl is None)) and (all_ctrl.shape[0] > 0):
-            mean_ctrl_sample = torch.mean(all_ctrl[:, :, list(include_ixs)], dim=0)
-            std_ctrl_sample = torch.std(all_ctrl[:, :, list(include_ixs)], dim=0)
+    if (not (all_ctrl is None)) and (all_ctrl.shape[0] > 0):
+        mean_ctrl_sample = torch.mean(all_ctrl[:, :, list(include_ixs)], dim=0)
+        std_ctrl_sample = torch.std(all_ctrl[:, :, list(include_ixs)], dim=0)
 
-            common_normp['info']['mean_ctrl_sample'] = mean_ctrl_sample
-            common_normp['info']['std_ctrl_sample'] = std_ctrl_sample
+        common_normp['info']['mean_ctrl_sample'] = mean_ctrl_sample
+        common_normp['info']['std_ctrl_sample'] = std_ctrl_sample
 
-            common_normp['info']['norm_dist'] = {}
-            x_axis = np.arange(0, 25, 0.01)
+        common_normp['info']['norm_dist'] = {}
+        x_axis = np.arange(0, 25, 0.01)
 
-            for cl in [0, 1, 2, 3]:
-                print("Difference of mean class ctrl (4) with class", cl)
+        for cl in [0, 1, 2, 3]:
+            print("Difference of mean class ctrl (4) with class", cl)
 
-                all_sample = None
-                for ds, kpi_p, ds_path, kpi_p_path in datasets:
-                    for t in ['train', 'valid']:
-                        ixs_ctrl = ds[t]['labels'] == cl
-                        if torch.any(ixs_ctrl):
-                            if all_sample is None:
-                                all_sample = ds[t]['samples']['norm'][ixs_ctrl]
-                            else:
-                                all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
-
-                norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2))
-                print("Mean norm", np.mean(norm), "Std.", np.std(norm))
-                common_normp['info']['norm_dist'][cl] = {'mean': np.mean(norm), 'std': np.std(norm)}
-
-            isPlot=True
-            if isPlot:
-                import matplotlib.pyplot as plt
-            # compute euclidean distance between samples of other classes and mean ctrl sample
-
-            # set the threshold for probability of observing a ctrl message based on its norm distance from template
-            ctrl_distrib = normal.pdf(x_axis, common_normp['info']['norm_dist'][3]['mean'], common_normp['info']['norm_dist'][3]['std'])
-            if isPlot:
-                plt.plot(x_axis, ctrl_distrib, label='Class ' + str(3))
-            for cl in [0, 1, 2]:
-                this_mean, this_std = common_normp['info']['norm_dist'][cl]['mean'], common_normp['info']['norm_dist'][cl]['std']
-                this_distrib = normal.pdf(x_axis, this_mean, this_std)
-                thr_ix = np.where(ctrl_distrib < this_distrib)[0][0]
-                thr_val = x_axis[thr_ix]
-                common_normp['info']['norm_dist'][cl]['thr'] = thr_val # save threshold value
-                print("Threshold class ", cl, ":", thr_val)
-                if isPlot:
-                    plt.plot(x_axis, this_distrib, label='Class ' + str(cl))
-
-            # find min threshold
-            min_threshold = min([common_normp['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
-            norm_threshold = min_threshold
-
-            if isPlot:
-
-                plt.legend()
-                plt.axvline(x=min_threshold, ls='--', c='gray')
-                plt.show()
-
-            if isPlot:
-                plt.imshow(mean_ctrl_sample)
-                plt.colorbar()
-                plt.show()
-                #plt.imshow(std_ctrl_sample)
-                #plt.colorbar()
-                #plt.show()
-
-            all_sample_noctrl = None
-            all_labels_noctrl = None
+            all_sample = None
             for ds, kpi_p, ds_path, kpi_p_path in datasets:
                 for t in ['train', 'valid']:
-                    ixs_ctrl = ds[t]['labels'] != ctrl_class
+                    ixs_ctrl = ds[t]['labels'] == cl
                     if torch.any(ixs_ctrl):
-                        if all_sample_noctrl is None and all_labels_noctrl is None:
-                            all_sample_noctrl = ds[t]['samples']['norm'][ixs_ctrl]
-                            all_labels_noctrl = ds[t]['labels'][ixs_ctrl]
+                        if all_sample is None:
+                            all_sample = ds[t]['samples']['norm'][ixs_ctrl]
                         else:
-                            all_sample_noctrl = torch.cat((all_sample_noctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
-                            all_labels_noctrl = torch.cat((all_labels_noctrl, ds[t]['labels'][ixs_ctrl]), dim=0)
-            # show a barplot representing the amount of samples that should be relabeled
-            obs_excludecols = all_sample_noctrl[:, :, list(include_ixs)]
-            norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
-            possible_ctrl_ixs = norm < norm_threshold # TODO this need to be changed to a dynamic threshold based on slice length and datasets combinations
-            possible_ctrl_labels = all_labels_noctrl[possible_ctrl_ixs].numpy()
-            unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
-            print("Unique labels", unique_labels, " count", unique_counts)
-            if isPlot:
-                plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
-                plt.show()
+                            all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
 
-        # lastly, let's save the new global parameters
-        safe_pickle_dump(global_norm_path, common_normp)
+            norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2))
+            print("Mean norm", np.mean(norm), "Std.", np.std(norm))
+            common_normp['info']['norm_dist'][cl] = {'mean': np.mean(norm), 'std': np.std(norm)}
+
+        isPlot=True
+        if isPlot:
+            import matplotlib.pyplot as plt
+        # compute euclidean distance between samples of other classes and mean ctrl sample
+
+        # set the threshold for probability of observing a ctrl message based on its norm distance from template
+        ctrl_distrib = normal.pdf(x_axis, common_normp['info']['norm_dist'][3]['mean'], common_normp['info']['norm_dist'][3]['std'])
+        if isPlot:
+            plt.plot(x_axis, ctrl_distrib, label='Class ' + str(3))
+        for cl in [0, 1, 2]:
+            this_mean, this_std = common_normp['info']['norm_dist'][cl]['mean'], common_normp['info']['norm_dist'][cl]['std']
+            this_distrib = normal.pdf(x_axis, this_mean, this_std)
+            thr_ix = np.where(ctrl_distrib < this_distrib)[0][0]
+            thr_val = x_axis[thr_ix]
+            common_normp['info']['norm_dist'][cl]['thr'] = thr_val # save threshold value
+            print("Threshold class ", cl, ":", thr_val)
+            if isPlot:
+                plt.plot(x_axis, this_distrib, label='Class ' + str(cl))
+
+        # find min threshold
+        min_threshold = min([common_normp['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        norm_threshold = min_threshold
+
+        if isPlot:
+
+            plt.legend()
+            plt.axvline(x=min_threshold, ls='--', c='gray')
+            plt.show()
+
+        if isPlot:
+            plt.imshow(mean_ctrl_sample)
+            plt.colorbar()
+            plt.show()
+            #plt.imshow(std_ctrl_sample)
+            #plt.colorbar()
+            #plt.show()
+
+        all_sample_noctrl = None
+        all_labels_noctrl = None
+        for ds, kpi_p, ds_path, kpi_p_path in datasets:
+            for t in ['train', 'valid']:
+                ixs_ctrl = ds[t]['labels'] != ctrl_class
+                if torch.any(ixs_ctrl):
+                    if all_sample_noctrl is None and all_labels_noctrl is None:
+                        all_sample_noctrl = ds[t]['samples']['norm'][ixs_ctrl]
+                        all_labels_noctrl = ds[t]['labels'][ixs_ctrl]
+                    else:
+                        all_sample_noctrl = torch.cat((all_sample_noctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
+                        all_labels_noctrl = torch.cat((all_labels_noctrl, ds[t]['labels'][ixs_ctrl]), dim=0)
+        # show a barplot representing the amount of samples that should be relabeled
+        obs_excludecols = all_sample_noctrl[:, :, list(include_ixs)]
+        norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
+        possible_ctrl_ixs = norm < norm_threshold # TODO this need to be changed to a dynamic threshold based on slice length and datasets combinations
+        possible_ctrl_labels = all_labels_noctrl[possible_ctrl_ixs].numpy()
+        unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
+        print("Unique labels", unique_labels, " count", unique_counts)
+        if isPlot:
+            plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
+            plt.show()
+
+    # lastly, let's save the new global parameters
+    safe_pickle_dump(global_norm_path, common_normp)
