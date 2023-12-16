@@ -8,10 +8,14 @@
 only_build=false
 # ...do something interesting...
 if [ "$only_build" = false ] ; then
+  # for consistency, use the same radio.conf file
+  sshpass -p "scope" scp ./utils/radio_tgen.conf $1:/root/radio_api/
+  sshpass -p "scope" scp ./utils/radio_tgen.conf $2:/root/radio_api/
+  
   # start the RF scenario + SCOPE on the gNB
-  sshpass -p "scope" ssh $1 'colosseumcli rf start 1017 -c && cd /root/radio_api && python3 scope_start.py --config-file radio_interactive.conf'
+  sshpass -p "scope" ssh $1 'colosseumcli rf start 10042 -c && cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf'
   # start SCOPE on the UE
-  sshpass -p "scope" ssh $2 'cd /root/radio_api && python3 scope_start.py --config-file radio_interactive.conf'
+  sshpass -p "scope" ssh $2 'cd /root/radio_api && python3 scope_start.py --config-file radio_tgen.conf'
   # Start the Near-RT RIC
   sshpass -p "ChangeMe" ssh $3 'cd ~ && cd radio_code/colosseum-near-rt-ric/setup-scripts/ && ./setup-ric.sh col0'
 fi
