@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-from ORAN_dataset import normalize_KPIs
 
 classmap = {'embb': 0, 'mmtc': 1, 'urll': 2, 'ctrl': 3}
 colormap = {0: '#D97652', 1: '#56A662', 2: '#BF4E58', 3: '#8172B3'}
@@ -126,6 +125,7 @@ if __name__ == "__main__":
     args, _ = parser.parse_known_args()
 
     from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
+    from ORAN_dataset import normalize_KPIs
 
     PATH = args.trace_path
     if PATH[-1] == '/':  # due to use of os.basename
