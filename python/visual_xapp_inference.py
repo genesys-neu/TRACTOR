@@ -81,6 +81,7 @@ def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0
 
 def process_norm_params(all_feats_raw, colsparam_dict):
     all_feats = np.arange(0, all_feats_raw)
+    colsparam_dict = pickle.load(open(colsparam_dict, 'rb')) # was missing this, feel free to rename
     if colsparam_dict[0] != 'Timestamp':
         # consider the missing Timestamp feature in the normalization parameters
         # by adjusting indexes of features to be removed.
@@ -105,7 +106,7 @@ def process_norm_params(all_feats_raw, colsparam_dict):
           "\tFeature-to-KPI map", repr(map_feat2KPI), "\n",
           "Column params for normalization:\n", repr(colsparams)
           )
-    return colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len, colsparam_dict['info']['mean_ctrl_sample']
+    return colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len#, colsparam_dict['info']['mean_ctrl_sample'] # extra debugging variable not passed to the xapp for now
 
 
 if __name__ == "__main__":
