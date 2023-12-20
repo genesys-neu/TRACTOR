@@ -1,0 +1,5 @@
+App name,No.,Time,Source,Destination,Protocol,Length
+WhatsApp,1,0,172.30.1.1,172.30.1.250,TCP,108
+WhatsApp,2,0.227566,172.30.1.250,172.30.1.1,TCP,88
+Google Play service,3,599,172.30.1.1,172.30.1.250,DNS,112
+Google Play service,4,600,172.30.1.250,172.30.1.1,DNS,368
