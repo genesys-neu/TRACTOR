@@ -25,9 +25,9 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
     control_sck = open_control_socket(4200)
 
     pos_enc = False # not supported at the moment
-
-    colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len = process_norm_params(all_feats_raw,
-                                                                                          norm_param_path)
+    colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
+    colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len, mean_ctrl_sample = process_norm_params(all_feats_raw,
+                                                                                          colsparam_dict)
 
     # initialize the KPI matrix
     kpi = []
