@@ -147,7 +147,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
 
     #columns_maxmin, trials_in_norm = normalize_KPIs(cols_names, trials_in)
 
-    columns_maxmin = extract_max_min_values(cols_names, trials_in)
+    columns_maxmin = extract_feats_stats(cols_names, trials_in)
     trials_in_norm = normalize_KPIs(columns_maxmin, trials_in)
 
     # generate (shuffled) train and test data
@@ -365,12 +365,14 @@ def get_trace_singleUE(data_path, data_type, drop_colnames, isControlClass, mode
     }, cols_names
 
 
-def extract_max_min_values(cols_names, trials_in):
+def extract_feats_stats(cols_names, trials_in):
     columns_maxmin = {}
     for c in range(trials_in.shape[2]):
         col_max = trials_in[:, :, c].max()
         col_min = trials_in[:, :, c].min()
-        columns_maxmin[c] = {'max': col_max, 'min': col_min, 'name': cols_names[c]}
+        col_mean = trials_in[:, :, c].mean()
+        col_std = trials_in[:, :, c].std()
+        columns_maxmin[c] = {'max': col_max, 'min': col_min, 'mean': col_mean, 'std': col_std, 'name': cols_names[c]}
     return columns_maxmin
 
 def normalize_KPIs(columns_maxmin, trials_in, doPrint=False):
@@ -799,6 +801,7 @@ if __name__ == "__main__":
             common_normp['info']['norm_dist'][cl] = {'mean': np.mean(norm), 'std': np.std(norm)}
 
         isPlot=True
+        relabel_method = "conservative" # or progressive :)
         if isPlot:
             import matplotlib.pyplot as plt
         # compute euclidean distance between samples of other classes and mean ctrl sample
@@ -810,8 +813,16 @@ if __name__ == "__main__":
         for cl in [0, 1, 2]:
             this_mean, this_std = common_normp['info']['norm_dist'][cl]['mean'], common_normp['info']['norm_dist'][cl]['std']
             this_distrib = normal.pdf(x_axis, this_mean, this_std)
-            thr_ix = np.where(ctrl_distrib < this_distrib)[0][0]
-            thr_val = x_axis[thr_ix]
+            if relabel_method == "progressive":
+                # here we compare the distribution curves and pick the threshold as the point in the distribution
+                # where the probability of being ctrl is less than all the others
+                thr_ix = np.where(ctrl_distrib < this_distrib)[0][0]
+                thr_val = x_axis[thr_ix]
+            else:
+                # here we adopt a more conservative method. For each distribution of classes (except CTRL),
+                # we subtract 1 standard deviation from its mean and use that as threshold
+                thr_val = this_mean - (1 * this_std)
+
             common_normp['info']['norm_dist'][cl]['thr'] = thr_val # save threshold value
             print("Threshold class ", cl, ":", thr_val)
             if isPlot:
@@ -850,7 +861,7 @@ if __name__ == "__main__":
         # show a barplot representing the amount of samples that should be relabeled
         obs_excludecols = all_sample_noctrl[:, :, list(include_ixs)]
         norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
-        possible_ctrl_ixs = norm < norm_threshold # TODO this need to be changed to a dynamic threshold based on slice length and datasets combinations
+        possible_ctrl_ixs = norm < norm_threshold # dynamic threshold based on slice length and datasets combinations
         possible_ctrl_labels = all_labels_noctrl[possible_ctrl_ixs].numpy()
         unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
         print("Unique labels", unique_labels, " count", unique_counts)
@@ -858,5 +869,15 @@ if __name__ == "__main__":
             plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
             plt.show()
 
+        sample_plots = all_sample_noctrl[possible_ctrl_ixs].numpy()
+        label_plots = all_labels_noctrl[possible_ctrl_ixs].numpy()
+        norm_plots = norm[possible_ctrl_ixs]
+        """
+        os.makedirs(os.path.join(path, 'img'), exist_ok=True)
+        for s in range(sample_plots.shape[0]):
+            plt.imsave(os.path.join(path, 'img', "lbl" + str(label_plots[s]) + "__relab" + str(s) + "_th_" + str(
+                norm_plots[s]) + "_sample_noctrl.png"), sample_plots[s])
+        """
     # lastly, let's save the new global parameters
     safe_pickle_dump(global_norm_path, common_normp)
+
