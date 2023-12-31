@@ -21,18 +21,19 @@ def natural_keys(text):
 import torch
 
 
-def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, save_plain_img=False, postfix='', colormap = {0: '#D97652', 1: '#56A662', 2: '#BF4E58', 3: '#8172B3'}, hatchmap = {0: '/', 1: '\\', 2: '//', 3: '.' }):
+def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0, save_plain_img=False, postfix='', folder_postfix='', colormap = {0: '#D97652', 1: '#56A662', 2: '#BF4E58', 3: '#8172B3'}, hatchmap = {0: '/', 1: '\\', 2: '//', 3: '.' }):
     imgout = np.array(output_list_kpi).T
     # Create figure and axes
     fig, ax = plt.subplots(figsize=(50, 5))
     # Display the image
     pos = ax.imshow(imgout, extent=[0, len(output_list_kpi), 0, imgout.shape[0]], aspect='auto', vmin=0., vmax=1.)
+    imgs_path = os.path.join(img_path + '/imgs_'+folder_postfix, 'slice' + str(slice_len))
+    os.makedirs(imgs_path, exist_ok=True)
     if save_plain_img:
-        os.makedirs(img_path + '/imgs', exist_ok=True)
         #fig.colorbar(pos)
-        plt.savefig(img_path + '/imgs/outputs_' + os.path.basename(img_path) + 's' + str(
+        plt.savefig(os.path.join(imgs_path, 'outputs_' + os.path.basename(img_path) + 's' + str(
             head - len(output_list_kpi)) + '_e' + str(
-            head) + '__plain.png')
+            head) + '__plain.png'))
 
     # add white background
     ax.imshow(np.ones(imgout.shape), extent=[0, len(output_list_kpi), 0, imgout.shape[0]], cmap='bone', aspect='auto', vmin=0., vmax=1.)
@@ -73,24 +74,15 @@ def plot_trace_class(output_list_kpi, output_list_y, img_path, slice_len, head=0
         rect_len = 1    # reset rectangle len
         slicestart_ix = ix  # set the start for the next rectangle
 
-    os.makedirs(img_path + '/imgs', exist_ok=True)
-    plt.savefig(img_path + '/imgs/outputs_' + os.path.basename(img_path) + 's' + str(head - len(output_list_kpi)) + '_e' + str(
-        head) + postfix + '.png')
+    plt.savefig(os.path.join(imgs_path, 'outputs_' + os.path.basename(img_path) + 's' + str(head - len(output_list_kpi)) + '_e' + str(
+        head) + postfix + '.png'))
     plt.clf()
 
 
 def process_norm_params(all_feats_raw, colsparam_dict):
     all_feats = np.arange(0, all_feats_raw)
-    if colsparam_dict[0] != 'Timestamp':
-        # consider the missing Timestamp feature in the normalization parameters
-        # by adjusting indexes of features to be removed.
-        exclude_param = [0] + [i + 1 for i in colsparam_dict['info']['exclude_cols_ix']]
-        # Also readjust the features keys in the dictionary
-        colsparams = {key + 1: value for key, value in colsparam_dict.items() if isinstance(key, int)}
-        colsparams[0] = {'name': 'Timestamp', 'max': None, 'min': None}
-    else:
-        exclude_param = colsparam_dict['info']['exclude_cols_ix']
-        colsparams = {key: value for key, value in colsparam_dict.items() if isinstance(key, int)}
+    exclude_param = colsparam_dict['info']['exclude_cols_ix']
+    colsparams = {key: value for key, value in colsparam_dict.items() if isinstance(key, int)}
     indexes_to_keep = np.array([i for i in range(len(all_feats)) if i not in exclude_param])
     # we obtain num of input features this from the normalization/relabeling info
     num_feats = len(indexes_to_keep)
@@ -105,7 +97,7 @@ def process_norm_params(all_feats_raw, colsparam_dict):
           "\tFeature-to-KPI map", repr(map_feat2KPI), "\n",
           "Column params for normalization:\n", repr(colsparams)
           )
-    return colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len, colsparam_dict['info']['mean_ctrl_sample'] # extra debugging variable not passed to the xapp for now
+    return colsparams, indexes_to_keep, map_feat2KPI, num_feats, slice_len, colsparam_dict['info']['mean_ctrl_sample']
 
 
 if __name__ == "__main__":
@@ -117,15 +109,16 @@ if __name__ == "__main__":
     parser.add_argument("--slicelen", choices=[4, 8, 16, 32, 64], type=int, default=32, help="Specify the slicelen to determine the classifier to load")
     parser.add_argument("--model_path", help="Path to TRACTOR model to load."  )
     parser.add_argument("--norm_param_path", default="", help="Normalization parameters path.")
-    parser.add_argument("--model_type", default="Tv1", choices=['CNN', 'Tv1', 'Tv2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
+    parser.add_argument("--model_type", default="Tv1", choices=['CNN', 'Tv1', 'Tv1_old', 'Tv2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
     parser.add_argument("--Nclasses", default=4, help="Used to initialize the model")
+    parser.add_argument("--dir_postfix", default="", help="This is appended to the name of the output folder for images and text")
     parser.add_argument("--CTRLcheck", action='store_true', default=False, help="At test time (inference), it will compare the sample with CTRL template to determine if its a correct CTRL sample")
     parser.add_argument("--chZeros", action='store_true', default=False, help="[Deprecated] At test time, don't count the occurrences of ctrl class")
 
     args, _ = parser.parse_known_args()
 
-    from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
-    from ORAN_dataset import normalize_KPIs
+    from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2, TransformerNN_old
+    from ORAN_dataset import normalize_RAW_KPIs
 
     PATH = args.trace_path
     if PATH[-1] == '/':  # due to use of os.basename
@@ -249,6 +242,8 @@ if __name__ == "__main__":
         if args.model_type is not None:
             if args.model_type == 'Tv1':
                 model_type = TransformerNN
+            elif args.model_type == 'Tv1_old':
+                model_type = TransformerNN_old
             elif args.model_type == 'Tv2':
                 model_type = TransformerNN_v2
             elif args.model_type == 'ViT':
@@ -265,7 +260,8 @@ if __name__ == "__main__":
         all_feats_raw = 31
 
         colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
-        relabel_norm_threshold = min([colsparam_dict['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        #relabel_norm_threshold = min([colsparam_dict['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        relabel_norm_threshold = colsparam_dict['info']['norm_dist'][3]['mean']
         (colsparams,
          indexes_to_keep,
          map_feat2KPI,
@@ -283,6 +279,8 @@ if __name__ == "__main__":
         if model_type in [TransformerNN, TransformerNN_v2]:
             model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1,
                                custom_enc=True)
+        elif model_type == TransformerNN_old:
+            model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
         elif model_type == ConvNN:
             model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
         else:
@@ -298,7 +296,6 @@ if __name__ == "__main__":
             model.load_state_dict(torch.load(torch_model_path, map_location='cpu')['model_state_dict'])
         model.to(device)
         model.eval()
-
 
         pkl_list = glob.glob(os.path.join(PATH, 'replay*.pkl'))
         for ix, p in enumerate(pkl_list):
@@ -321,7 +318,9 @@ if __name__ == "__main__":
             num_samples = 0
             num_verified_ctrl = 0
             num_heuristic_ctrl = 0
-            filt_kpi_offset = slice_len # momentarily... we skip the first 16 samples
+            filt_kpi_offset = slice_len # TODO we are only saving the last raw KPI in xapp code
+                                        #   momentarily... we skip the first "slice_len" samples
+            txt_output = ""
             for t in range(kpis_raw.shape[0]):  # iterate over the size of raw kpis and account for the offset of filtered ones
                 #print('kpis_raw[',t,']')
                 if t + args.slicelen < kpis_raw.shape[0]:
@@ -330,15 +329,13 @@ if __name__ == "__main__":
                     kpi_filt = input_sample_raw[:,indexes_to_keep]
 
                     for f in range(kpi_filt.shape[1]):
-                        c = map_feat2KPI[f]
-                        # print('***** ' + colsparams[c]['name']+' ('+str(c)+') *****')
-                        if np.any(kpi_filt[:, f] > colsparams[c]['max']) or np.any(kpi_filt[:, f] < colsparams[c]['min']):
+                        if np.any(kpi_filt[:, f] > colsparams[f]['max']) or np.any(kpi_filt[:, f] < colsparams[f]['min']):
                             # print("Clipping ", colsparams[c]['min'], "< x <", colsparams[c]['max'])
-                            kpi_filt[:, f] = np.clip(kpi_filt[:, f], colsparams[c]['min'], colsparams[c]['max'])
+                            kpi_filt[:, f] = np.clip(kpi_filt[:, f], colsparams[f]['min'], colsparams[f]['max'])
 
                         # print('Un-normalized vector'+repr(kpi_filt[:, f]))
-                        kpi_filt[:, f] = (kpi_filt[:, f] - colsparams[c]['min']) / (
-                                    colsparams[c]['max'] - colsparams[c]['min'])
+                        kpi_filt[:, f] = (kpi_filt[:, f] - colsparams[f]['min']) / (
+                                    colsparams[f]['max'] - colsparams[f]['min'])
                         # print('Normalized vector: '+repr(kpi_filt[:, f]))
 
                     input = torch.Tensor(kpi_filt[np.newaxis, :, :])
@@ -359,19 +356,25 @@ if __name__ == "__main__":
 
                         # exclude column 0 (Timestamp) and 2 (IMSI)
                         # NOTE: at this point, we still have all KPIs (unfiltered) in mean_ctrl_sample
-                        include_ixs = set(range(all_feats_raw-1)) if colsparam_dict[0] != 'Timestamp' else set(range(all_feats_raw))
+                        #include_ixs = set(range(all_feats_raw-1)) if colsparam_dict[0] != 'Timestamp' else set(range(all_feats_raw))
+                        """
                         remove_cols = ['Timestamp', 'IMSI']
                         for k, v in colsparam_dict.items():
                             if isinstance(k, int) and v['name'] in remove_cols:
                                 include_ixs.remove(k)
+                        """
+                        assert mean_ctrl_sample.shape[-1] == len(indexes_to_keep), "Check that features size is the same"
+                        #if colsparam_dict[0] != 'Timestamp':
+                        #    input_sample_raw = input_sample_raw[:, 1:]  # remove the first column (Timestamp)
 
-                        assert mean_ctrl_sample.shape[-1] == len(include_ixs), "Check that features size is the same"
-                        if colsparam_dict[0] != 'Timestamp':
-                            input_sample_raw = input_sample_raw[:, 1:]  # remove the first column (Timestamp)
-
-                        input_sample_raw_norm = normalize_KPIs(columns_maxmin=colsparam_dict, trials_in=input_sample_raw[np.newaxis,:])
+                        input_sample_filtd_norm = normalize_RAW_KPIs(columns_maxmin=colsparam_dict,
+                                                                   trials_in=input_sample_raw[np.newaxis,:],
+                                                                   map_feat2KPI=map_feat2KPI,
+                                                                   indexes_to_keep=indexes_to_keep,
+                                                                   doPrint=False)
                         # compute Euclidean distance between samples of other classes and mean ctrl sample
-                        obs_excludecols = np.squeeze(input_sample_raw_norm)[:, list(include_ixs)]
+                        obs_excludecols = np.squeeze(input_sample_filtd_norm)
+
                         norm = np.linalg.norm(obs_excludecols - np.array(mean_ctrl_sample))
                         # here we measure the norm (i.e. Euclidean distance) with mean_ctrl_sample is less than a given
                         # threshold, which should correspond to CTRL (i.e. silent) traffic portions. Note that the lower the threshold,
@@ -396,25 +399,33 @@ if __name__ == "__main__":
                 mypost += '_slice' + str(args.slicelen)
                 mypost += '_chZero' if check_zeros else ''
                 mypost += '_whitebg'
-                # TODO we should use kpis_raw instead of kpis, but not working right now... need to fix visualization for inference
-                plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True, hatchmap=None)
+                plot_trace_class(kpis, output_list_y, PATH, args.slicelen, folder_postfix=args.dir_postfix, postfix=mypost, save_plain_img=True, hatchmap=None)
                 mypost += '_hatch'
-                # TODO we should use kpis_raw instead of kpis, but not working right now... need to fix visualization for inference
-                plot_trace_class(kpis, output_list_y, PATH, args.slicelen, postfix=mypost, save_plain_img=True)
+                plot_trace_class(kpis, output_list_y, PATH, args.slicelen, folder_postfix=args.dir_postfix, postfix=mypost, save_plain_img=True)
 
                 print("Correct classification for traffic type (%): ", (num_correct / num_samples)*100., "num correct =", num_correct, ", num classifications =", num_samples)
+                txt_output += "Correct classification for traffic type (%): "+str((num_correct / num_samples)*100.)+" num correct = "+str(num_correct)+", num classifications ="+ str(num_samples)+"\n"
 
             if check_zeros or check_ctrl_tpl:
                 unique, counts = np.unique(output_list_y, return_counts=True)
                 count_class = dict(zip(unique, counts))
                 print(count_class)
+                txt_output += str(count_class)+"\n"
                 if 3 in count_class.keys():
                     if num_heuristic_ctrl > 0:
                         print("Percent of verified ctrl (through heuristic): ", (num_verified_ctrl / num_heuristic_ctrl)*100., "num verified =", num_verified_ctrl, ", num heuristic matches =", num_heuristic_ctrl )
+                        txt_output += "Percent of verified ctrl (through heuristic): " +str((num_verified_ctrl / num_heuristic_ctrl)*100.)+ "num verified = "+str(num_verified_ctrl)+", num heuristic matches = "+str(num_heuristic_ctrl)+"\n"
                     else:
                         print("No ctrl captured by the heuristic")
+                        txt_output += "No ctrl captured by the heuristic"+"\n"
                 else:
                     print("No ctrl captured by the heuristc")
+                    txt_output += "No ctrl captured by the heuristc"+"\n"
+
+            if txt_output != "":
+                imgs_path = os.path.join(PATH, 'imgs_'+args.dir_postfix, 'slice' + str(slice_len))
+                with open(os.path.join(imgs_path, "txt_output.log"), "w") as txt_file:
+                    txt_file.write(txt_output)
 
 
 

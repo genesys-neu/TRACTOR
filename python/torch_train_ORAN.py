@@ -144,12 +144,28 @@ def train_func(config: Dict):
     best_loss = np.inf
     epochs_wo_improvement = 0
     times = []
+    last_lr = np.inf
+    model_name = f'model.{slice_len}.{model_postfix}.pt'
+
     for e in range(epochs):
         ep_time = train_epoch(train_dataloader, model, loss_fn, optimizer, useRay)
         times.append(ep_time)
         loss, cm = validate_epoch(test_dataloader, model, loss_fn, Nclasses=Nclass,useRay=useRay)
 
         scheduler.step(loss)
+        if scheduler._last_lr[0] < last_lr:    # detect change in lr by scheduler
+            if last_lr == np.inf:
+                last_lr = scheduler._last_lr[0]
+            else:
+                print("[lr change detect] -> Reloading from best state, skipping epoch")
+                last_lr = scheduler._last_lr[0]
+                # Load the last best state for the model if the scheduler has changed.
+                # This is to address large instability while training with higher learning rates and avoid
+                # continuing from a worse state that might lead to a lower local optima
+                model.load_state_dict(torch.load(os.path.join(logdir, model_name), map_location=device)['model_state_dict'])
+                # skip checks and go to next epoch
+                continue
+
         loss_results.append(loss)
         epochs_wo_improvement += 1
         if useRay:
@@ -167,7 +183,6 @@ def train_func(config: Dict):
                 pickle.dump(cm, open(os.path.join(logdir, 'conf_matrix.last.pkl'), 'wb'))
                 epochs_wo_improvement = 0
                 best_loss = loss
-                model_name = f'model.{slice_len}.{model_postfix}.pt'
                 torch.save({
                      'model_state_dict': model.state_dict(),
                      'optimizer_state_dict': optimizer.state_dict(),
@@ -310,7 +325,7 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=30, help="Num of epochs to wait before interrupting training with early stopping")
     parser.add_argument("--lrmax", type=float, default=1e-3,help="Initial learning rate ")
     parser.add_argument("--lrmin", type=float, default=1e-5, help="Final learning rate after scheduling ")
-    parser.add_argument("--lrpatience", type=int, default=5, help="Patience before triggering learning rate decrease")
+    parser.add_argument("--lrpatience", type=int, default=10, help="Patience before triggering learning rate decrease")
     parser.add_argument("--useRay", action='store_true', default=False, help="Run training using Ray")
     parser.add_argument("--info_verbose", action='store_true', default=False, help="Print/plot some info about dataset visualization. ")
     parser.add_argument("--address", required=False, type=str, help="[Deprecated] the address to use for Ray")
@@ -326,9 +341,9 @@ if __name__ == "__main__":
         else:
             transformer = ViT
     print("--- Loading Train dataset...")
-    ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, path=args.ds_path, norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
+    ds_train = ORANTracesDataset(args.ds_file, key='train', normalize=args.isNorm, sanitize=False, path=args.ds_path, norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
     print("--- Loading Validation dataset...")
-    ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, path=args.ds_path,  norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
+    ds_test = ORANTracesDataset(args.ds_file, key='valid', normalize=args.isNorm, sanitize=False, path=args.ds_path,  norm_par_path=args.norm_param_path, relabel_CTRL=args.relabel_train)
     ds_info = ds_train.info()
 
     print("--- DS INFO ---")
@@ -339,7 +354,7 @@ if __name__ == "__main__":
     if not os.path.isdir(logdir):
         os.makedirs(logdir, exist_ok=True)
 
-    include_KPI_ixs = [1] + [x for x in range(3, ds_train.obs_input.shape[-1])]    # exclude column 0 (Timestamp) and 2 (IMSI)
+    #include_KPI_ixs = [1] + [x for x in range(3, ds_train.obs_input.shape[-1])]    # exclude column 0 (Timestamp) and 2 (IMSI)
     normp = pickle.load(open(os.path.join(args.ds_path, args.norm_param_path), "rb"))
 
     #[print(i, ':', normp[c]['name']) for i, c in enumerate(include_KPI_ixs) if 'name' in normp[c].keys()]

@@ -86,12 +86,16 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
         data_path = os.path.join(data_path, 'Multi-UE')
 
     cols_names = None
+    excluded_indexes_sUE = None
+    all_cols_names_sUE = None
+    excluded_indexes_mUE = None
+    all_cols_names_mUE = None
 
     for trial in trials:
         print('Generating dataset ', trial)
 
         if data_type == "singleUE_clean" or data_type == "singleUE_raw":
-            trial_samples, cols_n = get_trace_singleUE(data_path,
+            trial_samples, cols_n, excluded_indexes_sUE, all_cols_names_sUE = get_trace_singleUE(data_path,
                                                        data_type,
                                                        drop_colnames,
                                                        isControlClass,
@@ -121,7 +125,7 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
 
         elif data_type == "multiUE":
 
-            trial_samples, cols_n, all_input, all_labels = get_trace_multiUE(data_path,
+            trial_samples, cols_n, all_input, all_labels, excluded_indexes_mUE, all_cols_names_mUE = get_trace_multiUE(data_path,
                                                                              drop_colnames,
                                                                              isControlClass,
                                                                              mode,
@@ -135,12 +139,21 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
         trials_in.append(all_input)
         trials_lbl.append(all_labels)
 
+    if (not (excluded_indexes_sUE is None ) and not (excluded_indexes_mUE is None)) and (not(all_cols_names_sUE is None) and not (all_cols_names_mUE is None)):
+        assert np.all(excluded_indexes_sUE == excluded_indexes_mUE) and np.all(all_cols_names_sUE == all_cols_names_mUE), "Check these are matching for all datasets processed"
+
+    excluded_indexes = excluded_indexes_sUE # since are the same after previous check
+    all_cols_names = all_cols_names_sUE
+    if (excluded_indexes is None) and (all_cols_names is None):
+        excluded_indexes = excluded_indexes_mUE # to address multi UE only dataset case
+        all_cols_names = all_cols_names_mUE
+
     # if we are using Timestamp, we need to convert them to relative Timestamps before converting everything to float32
     # because the Timestamp integer requires 64 bits to be represented correctly, otherwise it gets truncated
     # TODO: would it be better todo this relative to the whole trace rather than on a slice basis?
     if cols_names[0] == 'Timestamp':
         for trial in trials_in:
-            trial = np.stack([relative_timestamp(x) for x in trial])
+            trial = np.stack([relative_timestamp(x) for x in trial])    # only needed if we want to use the experimental Positional Encoder (not working now)
 
     trials_in = np.concatenate(trials_in, axis=0).astype(np.float32)
     trials_lbl = np.concatenate(trials_lbl, axis=0).astype(int)
@@ -149,6 +162,8 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
 
     columns_maxmin = extract_feats_stats(cols_names, trials_in)
     trials_in_norm = normalize_KPIs(columns_maxmin, trials_in)
+
+    columns_maxmin['info'] = {'raw_cols_names': all_cols_names, 'exclude_cols_ix': excluded_indexes}
 
     # generate (shuffled) train and test data
     samp_ixs = list(range(trials_in.shape[0]))
@@ -212,7 +227,10 @@ def get_trace_multiUE(data_path, drop_colnames, isControlClass, mode,
     """
     all_input = None
     all_labels = None
+    all_cols_names = None
     cols_names = None
+    excluded_indexes = None
+
     ds_tree = load_csv_dataset__multi(data_path, trial, isControlClass)
     sliced_ds = {}
     for multi_conf in ds_tree.keys():
@@ -222,11 +240,19 @@ def get_trace_multiUE(data_path, drop_colnames, isControlClass, mode,
                 # process each user trace individually
                 ds = ds_tree[multi_conf][u]['kpis']
                 columns_drop = drop_colnames
+
+                # NOTE: assuming all the files have same headers and same columns are dropped
+                if excluded_indexes is None:  # done only once for all datasets
+                    excluded_indexes = [ds.columns.get_loc(c) for c in columns_drop]
+                if all_cols_names is None:  # only once
+                    all_cols_names = ds.columns.values  # before drop
+
                 if len(columns_drop) > 0:
                     ds.drop(columns_drop, axis=1, inplace=True)
+
                 # obtain column names after drop
                 # (assuming all the files have same columns and same columns dropped)
-                if cols_names is None:
+                if cols_names is None:  # done only once
                     cols_names = ds.columns.values
                 # slicing
                 # TODO adjust this and single UE function to return traces without slicing
@@ -258,7 +284,7 @@ def get_trace_multiUE(data_path, drop_colnames, isControlClass, mode,
                 else:
                     all_labels = np.concatenate((all_labels, labels))
 
-    return sliced_ds, cols_names, all_input, all_labels
+    return sliced_ds, cols_names, all_input, all_labels, excluded_indexes, all_cols_names
 
 
 def get_trace_singleUE(data_path, data_type, drop_colnames, isControlClass, mode, slice_len,
@@ -280,7 +306,9 @@ def get_trace_singleUE(data_path, data_type, drop_colnames, isControlClass, mode
     ctrl_traces = []
     ctrl_labels = []
 
+    all_cols_names = None
     cols_names = None
+    excluded_indexes = None
 
     for ix, ds in enumerate(datasets):
 
@@ -292,11 +320,18 @@ def get_trace_singleUE(data_path, data_type, drop_colnames, isControlClass, mode
                                 'tx_errors downlink (%)']  # ['Timestamp', 'tx_errors downlink (%)', 'dl_cqi']
             else:
                 columns_drop = drop_colnames
+
+            # NOTE: assuming all the files have same headers and same columns are dropped
+            if excluded_indexes is None:    # done only once for all datasets
+                excluded_indexes = [trace.columns.get_loc(c) for c in columns_drop]
+            if all_cols_names is None:  # only once
+                all_cols_names = trace.columns.values   # before drop
+
             trace.drop(columns_drop, axis=1, inplace=True)
 
             # NOTE: assuming all the files have same headers and same columns are dropped
-            if cols_names is None:
-                cols_names = trace.columns.values
+            if cols_names is None:   # done only once for all datasets
+                cols_names = trace.columns.values   # after drop
 
             # slicing
             new_trace = slice_dataset(trace, slice_len)
@@ -362,7 +397,7 @@ def get_trace_singleUE(data_path, data_type, drop_colnames, isControlClass, mode
         'embb': {'traces': embb_traces, 'labels': embb_labels},
         'mmtc': {'traces': mmtc_traces, 'labels': mmtc_labels},
         'urll': {'traces': urll_traces, 'labels': urll_labels}
-    }, cols_names
+    }, cols_names, excluded_indexes, all_cols_names
 
 
 def extract_feats_stats(cols_names, trials_in):
@@ -384,7 +419,7 @@ def normalize_KPIs(columns_maxmin, trials_in, doPrint=False):
                 col_min = max_min_info['min']
                 if not (col_max == col_min):
                     if doPrint:
-                        print('Normalizing Col.', max_min_info['name'], '[', c, '] -- Max', col_max, ', Min', col_min)
+                        print('Normalizing Col.', max_min_info['name'], ' -- Max', col_max, ', Min', col_min)
                     trials_in_norm[:, :, c] = (trials_in_norm[:, :, c] - col_min) / (col_max - col_min)
                 else:
                     trials_in_norm[:, :, c] = 0  # set all data as zero (we don't need this info cause it never changes)
@@ -395,6 +430,20 @@ def normalize_KPIs(columns_maxmin, trials_in, doPrint=False):
     return trials_in_norm
 
 
+def normalize_RAW_KPIs(columns_maxmin, trials_in, map_feat2KPI, indexes_to_keep, doPrint=False):
+    trials_in_norm = trials_in[:,:,indexes_to_keep].copy()
+    for f, max_min_info in columns_maxmin.items():
+        if isinstance(f, int):
+            c = map_feat2KPI[f]
+            col_max = max_min_info['max']
+            col_min = max_min_info['min']
+            if not (col_max == col_min):
+                if doPrint:
+                    print('Normalizing Col.', max_min_info['name'], '[', c, '] -- Max', col_max, ', Min', col_min)
+                trials_in_norm[:, :, f] = (trials_in_norm[:, :, f] - col_min) / (col_max - col_min)
+            else:
+                trials_in_norm[:, :, f] = 0  # set all data as zero (we don't need this info cause it never changes)
+    return trials_in_norm
 
 def slice_dataset(ds, slice_len):
     new_ds = []
@@ -527,8 +576,9 @@ class ORANTracesDataset(Dataset):
         # if needed, relabel the CTRL samples based on computation on the
         # normalization parameters (or just compute it from the dataset)
         self.ctrl_label = 3
-        self.relabel_norm_threshold = min([self.norm_params['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
-        print("Mean CTRL Norm distance threshold: ", self.relabel_norm_threshold)
+        #self.relabel_norm_threshold = min([self.norm_params['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        self.relabel_norm_threshold = self.norm_params['info']['norm_dist'][self.ctrl_label]['mean']
+        #print("Mean CTRL Norm distance threshold: ", self.relabel_norm_threshold)
         self.relabeled = False
         if relabel_CTRL:
             self.relabel_ctrl_samples()
@@ -557,6 +607,7 @@ class ORANTracesDataset(Dataset):
 
         # exclude column 0 (Timestamp) and 2 (IMSI)
         # NOTE: at this point, we still have all KPIs (unfiltered) in self.obs_input
+        # TODO: the "globalnorm" files have filtered parameters now, so this filtering is not needed for mean ctrl template
         include_ixs = set(range(self.obs_input.shape[-1]))
         remove_cols = ['Timestamp', 'IMSI']
         for k, v in self.norm_params.items():
@@ -564,10 +615,49 @@ class ORANTracesDataset(Dataset):
                 include_ixs.remove(k)
 
         mean_ctrl_sample = self.norm_params['info']['mean_ctrl_sample']
+        std_ctrl_sample = self.norm_params['info']['std_ctrl_sample']
         assert mean_ctrl_sample.shape[-1] == len(include_ixs), "Check that features size is the same"
 
-        # compute euclidean distance between samples of other classes and mean ctrl sample
         obs_excludecols = self.obs_input[:, :, list(include_ixs)]
+        """
+        # NEW METHOD
+        std_threshold = 2e-2
+        zero_std_cols = [col for col in range(std_ctrl_sample.shape[1]) if
+                         np.all(std_ctrl_sample[:, col].numpy() < std_threshold)]
+        np_obs = obs_excludecols.numpy()
+        possible_ctrl_ixs_new = []
+        np_mean_ctrl_sample = mean_ctrl_sample.numpy()
+        np_std_ctrl_sample = std_ctrl_sample.numpy()
+        for sample in tqdm(range(np_obs.shape[0]),desc="Finding CTRL template matches:"):
+            col_checks = np.zeros((len(zero_std_cols)))
+            for i, c in enumerate(zero_std_cols):
+                col_range = np_mean_ctrl_sample[:, c] + (3 * np_std_ctrl_sample[:,c])
+                #col_range = np_mean_ctrl_sample[:, c] #- 0.02617632*(1 * np_std_ctrl_sample[:,c])
+                #print(col_range)
+                if np.all(np_obs[sample,:,c] <= col_range):
+                    col_checks[i] = 1
+            if np.all(col_checks):
+                possible_ctrl_ixs_new.append(sample)
+
+        possible_ctrl_labels = self.obs_labels[possible_ctrl_ixs_new]
+        pre_unique_lbls, pre_unique_cnts = np.unique(self.obs_labels, return_counts=True)
+        print("Initial # samps. per label (before relabeling)\n\t Labels:", pre_unique_lbls, "Count:", pre_unique_cnts)
+        unique_labels, unique_counts = np.unique(possible_ctrl_labels, return_counts=True)
+        print("\tLabels that match CTRL mean template", unique_labels,
+              "\n\tNum of matching samples per label:", unique_counts)
+        # plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
+        # plt.show()
+        count_relabel = 0
+        for cix in possible_ctrl_ixs_new:
+            if self.obs_labels[cix] != self.ctrl_label:
+                # print(cix, self.obs_labels[cix], '-> 3')
+                self.obs_labels[cix] = self.ctrl_label
+                count_relabel += 1
+        print("Tot. samples relabeled (for every class):", count_relabel)
+        """
+
+        # OLD METHOD
+        # compute euclidean distance between samples of other classes and mean ctrl sample
         norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
         # here we get the indexes for all samples that have a norm (i.e. Euclidean distance) less than a given
         # threshold, which should correspond to CTRL (i.e. silent) traffic portions. Note that the lower the threshold,
@@ -582,6 +672,7 @@ class ORANTracesDataset(Dataset):
         print("\tLabels that contain norm < threshold", unique_labels, "\n\tNum of samples per label with norm < threshold:", unique_counts)
         #plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
         #plt.show()
+        
         count_relabel = 0
         for ix, isPossibleCTRL in enumerate(possible_ctrl_ixs):
             if isPossibleCTRL and self.obs_labels[ix] != self.ctrl_label:
@@ -649,6 +740,12 @@ if __name__ == "__main__":
     parser.add_argument("--data_type", default="singleUE_clean", nargs='+', choices=data_type_choice, help="This argument specifies the type of KPI traces to read into the dataset.")
     parser.add_argument("--drop_colnames", default=[], nargs='*', help="Remove specified column names from data frame when loaded from .csv files.s")
     parser.add_argument("--already_gen", action='store_true', default=False, help="[DEBUG] Use this flag for pre-generated dataset(s) that are only needed to compute new statistics.")
+    parser.add_argument("--exp_name", default='', help="Name of this experiment")
+    parser.add_argument("--cp_path", help='Path to save/load checkpoint and training/dataset logs')
+    parser.add_argument("--ds_pkl_paths", default="", help="(--already-gen) specify origin pkl file.")
+    parser.add_argument("--normp_pkl", default="", help="(--already-gen) specify origin pkl file.")
+    parser.add_argument("--exclude_cols", nargs="+", default=[0, 1, 2, 3, 4, 5, 6, 8, 14, 22, 27, 28, 29], help="(--already-gen) specify origin pkl file.")
+
     args, _ = parser.parse_known_args()
 
     from visual_xapp_inference import classmap
@@ -657,8 +754,12 @@ if __name__ == "__main__":
     trials = args.trials
     trials_multi = args.trials_multi
     ctrl_class = 3
-    isPlot = False
+    isPlot = True
     norm_threshold = None
+    logdir = os.path.join(args.cp_path, args.exp_name)
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir, exist_ok=True)
+
 
     datasets = []
 
@@ -690,30 +791,38 @@ if __name__ == "__main__":
     else:
         # DEBUG: in case you have already generated the datasets and
         # want just load it instead of recompute normalization parameters
-
-
-        for data_type in args.data_type:
-            trials = trials_multi if "multi" in data_type else trials
-
-            file_suffix = ''
-            for t in trials:
-                file_suffix += t
-                if t != trials[-1]:
-                    file_suffix += '_'
-
-            file_suffix += '__slice' + str(args.slicelen) + '_' + data_type
-            file_suffix += '_' + args.filemarker if args.filemarker else ''
-            zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
-            pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
-
-            dataset_path = os.path.join(pickle_ds_path,
-                                        'dataset__' + args.mode + '__' + file_suffix + zeros_suffix + '.pkl')
+        if args.ds_pkl_paths != "":
+            # TODO add possibiity to specify a list of pkl files instead of default paths (to allow multi UE also etc.)
+            assert (args.normp_pkl != ""), "[already_gen] Norm. params .pkl file has to be passed along dataset .pkl(s)"
+            dataset_path = args.ds_pkl_paths
+            pickle_ds_path = args.normp_pkl
             dataset = pickle.load(open(dataset_path, "rb"))
-            # save separately maxmin normalization parameters for each column/feature
-            norm_param_path = os.path.join(pickle_ds_path, 'cols_maxmin__' + file_suffix + '.pkl')
-            cols_maxmin = pickle.load(open(norm_param_path, "rb"))
+            cols_maxmin = pickle.load(open(pickle_ds_path, "rb"))
+            datasets.append((dataset, cols_maxmin, dataset_path, pickle_ds_path))
 
-            datasets.append((dataset, cols_maxmin, dataset_path, norm_param_path))
+        else:
+            for data_type in args.data_type:
+                trials = trials_multi if "multi" in data_type else trials
+                file_suffix = ''
+                for t in trials:
+                    file_suffix += t
+                    if t != trials[-1]:
+                        file_suffix += '_'
+
+                file_suffix += '__slice' + str(args.slicelen) + '_' + data_type
+                file_suffix += '_' + args.filemarker if args.filemarker else ''
+                zeros_suffix = '_ctrlcorrected_' if args.check_zeros else ''
+                pickle_ds_path = os.path.join(path, "Multi-UE") if "multi" in data_type else os.path.join(path, "SingleUE")
+
+                dataset_path = os.path.join(pickle_ds_path,
+                                            'dataset__' + args.mode + '__' + file_suffix + zeros_suffix + '.pkl')
+
+                dataset = pickle.load(open(dataset_path, "rb"))
+                # load maxmin normalization parameters for each column/feature
+                norm_param_path = os.path.join(pickle_ds_path, 'cols_maxmin__' + file_suffix + '.pkl')
+                cols_maxmin = pickle.load(open(norm_param_path, "rb"))
+
+                datasets.append((dataset, cols_maxmin, dataset_path, norm_param_path))
 
     # if multiple data types (i.e. singleUE, multiUE) have been processed,
     # let's define a common set of normalization/sanitization parameters
@@ -721,14 +830,27 @@ if __name__ == "__main__":
     # first, let's find a common set of columns to keep (i.e. the ones that have varying values)
     # and their common min max parameters for normalization
     common_normp = {}
+    novar_keys_raw = []
     novar_keys = []
     common_keys = set()
-    [common_keys.update(set(list(kpi_p.keys()))) for _, kpi_p, _, _ in datasets]
+    [common_keys.update(
+            set([k for k in kpi_p.keys() if isinstance(k, int)])
+        )
+        for _, kpi_p, _, _ in datasets]
 
-    for k in common_keys:   # for each common key/kpi feature
-        # verify that the name for the same key is the same
+    # verify that the raw column names are all the same  for all datasets
+    raw_col_names = datasets[0][1]['info']['raw_cols_names']
+    assert all([np.all(kpi_p['info']['raw_cols_names'] == raw_col_names) for _, kpi_p, _, _ in
+                datasets]), 'Ensure that raw kpis names are the same for all datasets'
+    exclude_cols_ix = datasets[0][1]['info']['exclude_cols_ix']
+    assert all([np.all(kpi_p['info']['exclude_cols_ix'] == exclude_cols_ix) for _, kpi_p, _, _ in
+                datasets]), 'Ensure that excluded kpi indexes are the same for all datasets'
+
+    for k in common_keys:   # for each common key/kpi featurepickle_ds_path
+        # verify that the key names are the same for all datasets
         first_ds_kpiname = datasets[0][1][k]['name']
-        assert all([kpi_p[k]['name'] == first_ds_kpiname for _, kpi_p, _, _ in datasets]), 'check that kpis and names have the same order'
+        assert all([kpi_p[k]['name'] == first_ds_kpiname for _, kpi_p, _, _ in datasets]), 'Ensure that kpis and names have the same order for all datasets'
+
         # obtain the overall max/min values
         common_normp[k] = {
             'name': first_ds_kpiname,
@@ -737,22 +859,49 @@ if __name__ == "__main__":
         }
         # annotate the features indexes that needs to be dropped when re-normalizing and sanitizing the data
         if common_normp[k]['max'] == common_normp[k]['min']:
+            for ix, name in enumerate(raw_col_names):    # use the names of first kpi params in the dataset (since they should be all the same)
+                if common_normp[k]['name'] == name:
+                    c = ix
+                    break
+            novar_keys_raw.append(c)
             novar_keys.append(k)
 
-    common_normp['info'] = {'exclude_cols_ix': novar_keys}
+    # let's also exclude the indexes from normalization parameters to reflect filtered features
+    common_normp_filtd = {}
+    feat_count = 0
+    for k in common_keys:
+        if not(k in novar_keys):
+            common_normp_filtd[feat_count] = common_normp[k].copy()
+            feat_count += 1
+    common_normp_filtd['info'] = {'exclude_cols_ix': list(set(novar_keys_raw).union(set(exclude_cols_ix)))}
+
+    common_normp = common_normp_filtd   # substitute the common norm parameters with newly filtered ones
+
     filemarker = '__' + args.filemarker if args.filemarker else ''
     global_norm_path = os.path.join(path, 'global__cols_maxmin'+filemarker+'_slice'+str(args.slicelen)+'.pkl')
+
+    # until now, we have retained the columns that are not excluded, but we still haven't removed
+    # the ones without variation (i.e. std = 0).
+    # we should remove those columns here as well before continuing computation of ctrl template
+    filtKPI_keep = list(set(range(len(common_keys))).difference(novar_keys))
+
+    for ds, kpi_p, ds_path, kpi_p_path in datasets:
+        for t in ['train', 'valid']:
+            ds[t]['samples']['norm'] = ds[t]['samples']['norm'][:, :, filtKPI_keep]
+            ds[t]['samples']['no_norm'] = ds[t]['samples']['no_norm'][:, :, filtKPI_keep]
+        safe_pickle_dump(os.path.splitext(ds_path)[0] + "__globalnorm.pkl", ds)
 
     # then let's create an alternative version of the datasets normalized with global paramters and save it in a separate file
     for ds, kpi_p, ds_path, kpi_p_path in datasets:
         print('---- Normalizing Training set ----')
-        trials_train_globalminmax = normalize_KPIs(common_normp, ds['train']['samples']['no_norm'].numpy())
+        trials_train_globalminmax = normalize_KPIs(common_normp, ds['train']['samples']['no_norm'].numpy(), doPrint=True) # filter out the additional columns with no variance
         ds['train']['samples']['norm'] = torch.Tensor(trials_train_globalminmax)
         print('---- Normalizing Validation set ----')
-        trials_valid_globalminmax = normalize_KPIs(common_normp, ds['valid']['samples']['no_norm'].numpy())
+        trials_valid_globalminmax = normalize_KPIs(common_normp, ds['valid']['samples']['no_norm'].numpy(), doPrint=True) # filter out the additional columns with no variance
         ds['valid']['samples']['norm'] = torch.Tensor(trials_valid_globalminmax)
         ds['info'] = {'global_norm_path': global_norm_path}
-        safe_pickle_dump(os.path.splitext(ds_path)[0] + "__globalnorm.pkl", ds)
+
+
 
     # second, let's compute an average CTRL traffic template to be used across multiple datasets
     # IMPORTANT: we have to use also the validation set for this and after the new normalization
@@ -766,22 +915,16 @@ if __name__ == "__main__":
                 else:
                     all_ctrl = torch.cat((all_ctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
 
-    # exclude column 0 (Timestamp) and 2 (IMSI)
-    include_ixs = set(range(datasets[0][0]['train']['samples']['norm'].shape[-1]))
-    remove_cols = ['Timestamp', 'IMSI']
-    for k, v in common_normp.items():
-        if isinstance(k, int) and (v['name'] in remove_cols):
-            include_ixs.remove(k)
 
     if (not (all_ctrl is None)) and (all_ctrl.shape[0] > 0):
-        mean_ctrl_sample = torch.mean(all_ctrl[:, :, list(include_ixs)], dim=0)
-        std_ctrl_sample = torch.std(all_ctrl[:, :, list(include_ixs)], dim=0)
+        mean_ctrl_sample = torch.mean(all_ctrl, dim=0)
+        std_ctrl_sample = torch.std(all_ctrl, dim=0)
 
         common_normp['info']['mean_ctrl_sample'] = mean_ctrl_sample
         common_normp['info']['std_ctrl_sample'] = std_ctrl_sample
 
         common_normp['info']['norm_dist'] = {}
-        x_axis = np.arange(0, 25, 0.01)
+        x_axis = np.arange(0, 15, 0.01)
 
         for cl in [0, 1, 2, 3]:
             print("Difference of mean class ctrl (4) with class", cl)
@@ -796,11 +939,10 @@ if __name__ == "__main__":
                         else:
                             all_sample = torch.cat((all_sample, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
 
-            norm = np.linalg.norm(all_sample[:, :, list(include_ixs)] - mean_ctrl_sample, axis=(1, 2))
+            norm = np.linalg.norm(all_sample - mean_ctrl_sample, axis=(1, 2))
             print("Mean norm", np.mean(norm), "Std.", np.std(norm))
             common_normp['info']['norm_dist'][cl] = {'mean': np.mean(norm), 'std': np.std(norm)}
 
-        isPlot=True
         relabel_method = "conservative" # or progressive :)
         if isPlot:
             import matplotlib.pyplot as plt
@@ -809,8 +951,17 @@ if __name__ == "__main__":
         # set the threshold for probability of observing a ctrl message based on its norm distance from template
         ctrl_distrib = normal.pdf(x_axis, common_normp['info']['norm_dist'][3]['mean'], common_normp['info']['norm_dist'][3]['std'])
         if isPlot:
-            plt.plot(x_axis, ctrl_distrib, label='Class ' + str(3))
-        for cl in [0, 1, 2]:
+            plt.figure(figsize=(7.5, 4.2))
+            plt.rc('font', size=14)  # Main text
+            plt.rc('axes', titlesize=14)  # Title
+            plt.rc('axes', labelsize=14)  # X and Y axis labels
+            plt.rc('xtick', labelsize=12)  # X-axis tick labels
+            plt.rc('ytick', labelsize=12)  # Y-axis tick labels
+            plt.rc('legend', fontsize=14)  # Legend font size
+            plt.rc('figure', titlesize=10)  # Figure title
+
+            plt.plot(x_axis, ctrl_distrib, label='ctrl')
+        for cl, traff_name in {0: 'eMBB', 1: 'mMTC', 2: 'URLLC'}.items():
             this_mean, this_std = common_normp['info']['norm_dist'][cl]['mean'], common_normp['info']['norm_dist'][cl]['std']
             this_distrib = normal.pdf(x_axis, this_mean, this_std)
             if relabel_method == "progressive":
@@ -826,22 +977,33 @@ if __name__ == "__main__":
             common_normp['info']['norm_dist'][cl]['thr'] = thr_val # save threshold value
             print("Threshold class ", cl, ":", thr_val)
             if isPlot:
-                plt.plot(x_axis, this_distrib, label='Class ' + str(cl))
+                if traff_name == "eMBB":
+                    linestyle='--'
+                elif traff_name == 'mMTC':
+                    linestyle='-.'
+                elif traff_name == 'URLLC':
+                    linestyle=':'
+                plt.plot(x_axis, this_distrib, linestyle, label=traff_name )
 
         # find min threshold
-        min_threshold = min([common_normp['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        #min_threshold = min([common_normp['info']['norm_dist'][cl]['thr'] for cl in [0, 1, 2]])
+        min_threshold = common_normp['info']['norm_dist'][3]['mean']
         norm_threshold = min_threshold
 
         if isPlot:
 
             plt.legend()
-            plt.axvline(x=min_threshold, ls='--', c='gray')
-            plt.show()
+            plt.xlabel('Euclidean distance from mean ctrl template')
+            plt.ylabel('Probability density')
+            plt.axvline(x=min_threshold, ls='-', c='gray')
+            plt.savefig(os.path.join(logdir, 'normDiff_distr.png'))
+            plt.clf()
 
         if isPlot:
             plt.imshow(mean_ctrl_sample)
             plt.colorbar()
-            plt.show()
+            plt.savefig(os.path.join(logdir, 'mean_ctrl_sample.png'))
+            plt.clf()
             #plt.imshow(std_ctrl_sample)
             #plt.colorbar()
             #plt.show()
@@ -859,7 +1021,7 @@ if __name__ == "__main__":
                         all_sample_noctrl = torch.cat((all_sample_noctrl, ds[t]['samples']['norm'][ixs_ctrl]), dim=0)
                         all_labels_noctrl = torch.cat((all_labels_noctrl, ds[t]['labels'][ixs_ctrl]), dim=0)
         # show a barplot representing the amount of samples that should be relabeled
-        obs_excludecols = all_sample_noctrl[:, :, list(include_ixs)]
+        obs_excludecols = all_sample_noctrl
         norm = np.linalg.norm(obs_excludecols - mean_ctrl_sample, axis=(1, 2))
         possible_ctrl_ixs = norm < norm_threshold # dynamic threshold based on slice length and datasets combinations
         possible_ctrl_labels = all_labels_noctrl[possible_ctrl_ixs].numpy()
@@ -867,7 +1029,8 @@ if __name__ == "__main__":
         print("Unique labels", unique_labels, " count", unique_counts)
         if isPlot:
             plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
-            plt.show()
+            plt.savefig(os.path.join(logdir, 'num_relabel_noctrl.png'))
+            plt.clf()
 
         sample_plots = all_sample_noctrl[possible_ctrl_ixs].numpy()
         label_plots = all_labels_noctrl[possible_ctrl_ixs].numpy()

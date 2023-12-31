@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import math
 
@@ -64,7 +65,7 @@ class TransformerNN(nn.Module):
                  dropout: float = 0.2, use_pos: bool = False, custom_enc: bool = False):
         super(TransformerNN, self).__init__()
 
-        if use_pos:
+        if use_pos and not custom_enc:
             num_feats = num_feats - 1 # exclude the timestamp column (0) that will be used for positional encoding
 
         self.norm = nn.LayerNorm(num_feats)
@@ -219,3 +220,47 @@ class PositionalEncoding(nn.Module):
             x = x + all_pe
 
         return self.dropout(x)
+
+
+class TransformerNN_old(nn.Module):
+    def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
+                 dropout: float = 0.2, use_pos: bool = False):
+        super(TransformerNN_old, self).__init__()
+        self.norm = nn.LayerNorm(num_feats)
+        # create the positional encoder
+        self.use_positional_enc = use_pos
+        self.pos_encoder = PositionalEncoding(num_feats + 1, dropout, max_len=5000)
+        # define the encoder layers
+        encoder_layers = TransformerEncoderLayer(num_feats, nhead, batch_first=True)
+        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+        self.d_model = num_feats
+
+        # we will not use the decoder
+        # instead we will add a linear layer, another scaled dropout layer, and finally a classifier layer
+        self.pre_classifier = torch.nn.Linear(num_feats *slice_len, 256)
+        self.dropout = torch.nn.Dropout(dropout)
+        self.classifier = torch.nn.Linear(256, classes)
+        self.logSoftmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, src):
+        """
+        Args:
+            src: Tensor, shape [batch_size, seq_len, features]
+        Returns:
+            output classes log probabilities
+        """
+        # src = self.norm(src) should not be necessary since output can be already normalized
+        # apply positional encoding if decided
+        if self.use_positional_enc:
+            src = self.pos_encoder(src).squeeze()
+        # pass through encoder layers
+        t_out = self.transformer_encoder(src)
+        # flatten already contextualized KPIs
+        t_out = torch.flatten(t_out, start_dim=1)
+        # Pass through MLP classifier
+        pooler = self.pre_classifier(t_out)
+        pooler = torch.nn.ReLU()(pooler)
+        pooler = self.dropout(pooler)
+        output = self.classifier(pooler)
+        output = self.logSoftmax(output)
+        return output
