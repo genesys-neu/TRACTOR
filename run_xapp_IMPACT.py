@@ -77,10 +77,10 @@ def main():
 
     control_sck = open_control_socket(4200)
 
-    slice_len = 8
+    slice_len = 32
     Nclass = 4
     num_feats = 17
-    torch_model_path = 'model/model_weights__slice8.pt'
+    torch_model_path = 'model/model_weights__slice32.pt'
     norm_param_path = 'model/cols_maxmin.pkl'
     colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
     # initialize the KPI matrix (4 samples, 19 KPIs each)
@@ -192,63 +192,93 @@ def main():
 
             # check to see if the recently received KPI is actually new
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
-            curr_timestamp = kpi_new[0]
-            # let's remove the KPIs we don't need
-            kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
-            # interference needs [16, 19, 23, 21]
-            kpi_filt_i = kpi_new[np.array([16, 19, 23, 21])]
 
-            if curr_timestamp > last_timestamp:
-                last_timestamp = curr_timestamp
+            if kpi_new[2] == 1010123456002:
+                curr_timestamp = kpi_new[0]
+                # let's remove the KPIs we don't need
+                kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
+                # interference needs [16, 19, 23, 21]
+                kpi_filt_i = kpi_new[np.array([16, 19, 23, 21])]
 
-                # first do traffic class prediction
-                if len(kpi) < slice_len:
-                    # if the incoming KPI list is empty, just add the incoming KPIs
-                    kpi.append(kpi_filt)
-                else:
-                    # to insert, we pop the first element of the list
-                    kpi.pop(0)
-                    # and append the last incoming KPI set
-                    kpi.append(kpi_filt)
-                    # here we have the new input ready for the ML model
-                    # let's create a numpy array
-                    np_kpi = np.array(kpi)
-                    # let's normalize each columns based on the params derived while training
-                    assert (np_kpi.shape[1] == len(list(colsparam_dict.keys())))
-                    for c in range(np_kpi.shape[1]):
-                        print('*****', c, '*****')
-                        logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
-                        np_kpi[:, c] = (np_kpi[:, c] - colsparam_dict[c]['min']) / (
-                                    colsparam_dict[c]['max'] - colsparam_dict[c]['min'])
-                        logging.info('Normalized vector: '+repr(np_kpi[:, c]))
-                    # and then pass it to our model as a torch tensor
-                    t_kpi = torch.Tensor(np_kpi.reshape(1, np_kpi.shape[0], np_kpi.shape[1])).to(device)
-                    try:
-                        pred = model(t_kpi)
-                        this_class = pred.argmax(1)
-                        logging.info('Predicted class ' + str(pred.argmax(1)))
-                        pickle.dump((np_kpi, this_class),
-                                    open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
-                        count_pkl += 1
-                    except:
-                        logging.info('ERROR while predicting class')
+                if curr_timestamp > last_timestamp:
+                    last_timestamp = curr_timestamp
 
-                # then do interference prediction
-                if len(kpi_i) < BLOCK_SIZE:
-                    kpi_i.append(kpi_filt_i)
-                else:
-                    kpi_i.pop(0)
-                    kpi_i.append(kpi_filt_i)
-                    np_kpi_i = np.array(kpi_i)
-                    np_kpi_i = normalize(np_kpi_i)
-                    output = predict_newdata(model_i, np_kpi_i)
-                    logging.info('Predicted interference ' + str(output))
-                    pickle.dump((np_kpi_i, output),
-                                open('/home/interference_output__' + str(int(time.time() * 1e3)) + '.pkl', 'wb'))
+                    # first do traffic class prediction
+                    if len(kpi) < slice_len:
+                        # if the incoming KPI list is empty, just add the incoming KPIs
+                        kpi.append(kpi_filt)
+                    else:
+                        # to insert, we pop the first element of the list
+                        kpi.pop(0)
+                        # and append the last incoming KPI set
+                        kpi.append(kpi_filt)
+                        # here we have the new input ready for the ML model
+                        # let's create a numpy array
+                        np_kpi = np.array(kpi)
+                        # let's normalize each columns based on the params derived while training
+                        assert (np_kpi.shape[1] == len(list(colsparam_dict.keys())))
+                        for c in range(np_kpi.shape[1]):
+                            print('*****', c, '*****')
+                            logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
+                            np_kpi[:, c] = (np_kpi[:, c] - colsparam_dict[c]['min']) / (
+                                        colsparam_dict[c]['max'] - colsparam_dict[c]['min'])
+                            logging.info('Normalized vector: '+repr(np_kpi[:, c]))
+                        # and then pass it to our model as a torch tensor
+                        t_kpi = torch.Tensor(np_kpi.reshape(1, np_kpi.shape[0], np_kpi.shape[1])).to(device)
+                        try:
+                            pred = model(t_kpi)
+                            this_class = pred.argmax(1)
+                            logging.info('Predicted class ' + str(pred.argmax(1)))
+                            pickle.dump((np_kpi, this_class),
+                                        open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
+                            count_pkl += 1
+                        except:
+                            logging.info('ERROR while predicting class')
 
+                    # then do interference prediction
+                    if len(kpi_i) < BLOCK_SIZE:
+                        kpi_i.append(kpi_filt_i)
+                    else:
+                        kpi_i.pop(0)
+                        kpi_i.append(kpi_filt_i)
+                        np_kpi_i = np.array(kpi_i)
+                        np_kpi_i = normalize(np_kpi_i)
+                        output = predict_newdata(model_i, np_kpi_i)
+                        logging.info('Predicted interference ' + str(output))
+                        pickle.dump((np_kpi_i, output),
+                                    open('/home/interference_output__' + str(int(time.time() * 1e3)) + '.pkl', 'wb'))
 
-                    # with open('/home/kpi_log.txt', 'a') as f:
-                    #   f.write(str(np_kpi[:, :5]) + '\n')
+                    # TODO: Add logic here to send control messages
+                    if this_class == 0:
+                        if output == 0:
+                            print('embb no interference')
+                        if output == 1:
+                            print('embb with interference')
+                        if output == 2:
+                            print('unexpected result: embb and cntrl')
+                    if this_class == 1:
+                        if output == 0:
+                            print('mmtc no interference')
+                        if output == 1:
+                            print('mmtc with interference')
+                        if output == 2:
+                            print('unexpected result: mmtc and cntrl')
+                    if this_class == 2:
+                        if output == 0:
+                            print('urllc no interference')
+                        if output == 1:
+                            print('urllc with interference')
+                        if output == 2:
+                            print('unexpected result: urllc and cntrl')
+                    if this_class == 3:
+                        if output == 0:
+                            print('unexpected result: cntrl no interference')
+                        if output == 1:
+                            print('unexpected result: cntrl with interference')
+                        if output == 2:
+                            print('cntrl no interference')
+                        # with open('/home/kpi_log.txt', 'a') as f:
+                        #   f.write(str(np_kpi[:, :5]) + '\n')
 
 
 
