@@ -546,7 +546,7 @@ def add_first_dim(x):
     return x[None]
 
 class ORANTracesDataset(Dataset):
-    def __init__(self, dataset_pkls, key, normalize=True, path='../logs/', norm_par_path="", sanitize=True, relabel_CTRL=False, relabel_norm_threshold=2.5, transform=None, target_transform=None):
+    def __init__(self, dataset_pkls, key, normalize=True, path='../logs/', norm_par_path="", sanitize=True, relabel_CTRL=False, transform=None, target_transform=None):
         self.obs_input, self.obs_labels = None, None
         self.path = path
         self.norm_params = None
@@ -620,7 +620,8 @@ class ORANTracesDataset(Dataset):
 
         obs_excludecols = self.obs_input[:, :, list(include_ixs)]
         """
-        # NEW METHOD
+        # NEW METHOD 
+        # TODO: needs to be revised
         std_threshold = 2e-2
         zero_std_cols = [col for col in range(std_ctrl_sample.shape[1]) if
                          np.all(std_ctrl_sample[:, col].numpy() < std_threshold)]
