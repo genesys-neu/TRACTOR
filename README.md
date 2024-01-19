@@ -53,11 +53,15 @@ Once the nodes have been initialized, you can connect to each of them and run th
 ```
 cd /root/radio_code/colosseum-scope-e2 && ./run_odu.sh
 ```
-- On RIC
+- On RIC, run the following command specifying, in the following order:
+  1. Path of model to be loaded for live traffic classification (`.pt`);
+  2. Path of normalization parameters used during training (`.pkl`);
+  3. Model type, chosen from `['CNN', 'Tv1', 'Tv2']` based on the type of model loaded.
+
 ```
 docker exec -it sample-xapp-24 bash
 cd /home/sample-xapp/
-./run_xapp.sh
+./run_xapp.sh <model_path> <norm_param_path> <model_type>
 ```
 and wait until the app init is complete.
 
