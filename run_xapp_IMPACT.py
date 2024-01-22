@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from python.ORAN_dataset import *
-from python.torch_train_ORAN_colosseum import ConvNN as global_model
+from python.ORAN_models import ConvNN as global_model
 import time
 from xapp_control import *
 
@@ -248,7 +248,7 @@ def main():
                         pickle.dump((np_kpi_i, output),
                                     open('/home/interference_output__' + str(int(time.time() * 1e3)) + '.pkl', 'wb'))
 
-                    # TODO: Add logic here to send control messages
+                    # TODO: Add control messages to this logic
                     if this_class == 0:
                         if output == 0:
                             print('embb no interference')
