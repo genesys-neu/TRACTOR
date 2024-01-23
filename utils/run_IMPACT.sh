@@ -407,6 +407,10 @@ sshpass -p "sunflower" ssh $interferer "kill -INT ${int_PID}"
 
 sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./$out_dir/
 
+#TODO: verify copy log file from xApp
+sshpass - p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/*.log /root/."
+sshpass -p "ChangeMe" scp $ric:/root/*.log ./$out_dir/
+
 echo "All tests complete"
 kill $(jobs -p)
 
