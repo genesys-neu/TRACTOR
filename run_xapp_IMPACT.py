@@ -229,8 +229,8 @@ def main():
                             pred = model(t_kpi)
                             this_class = pred.argmax(1)
                             logging.info('Predicted class ' + str(pred.argmax(1)))
-                            pickle.dump((np_kpi, this_class),
-                                        open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
+                            # pickle.dump((np_kpi, this_class),
+                            #             open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
                             count_pkl += 1
                         except:
                             logging.info('ERROR while predicting class')
@@ -245,40 +245,63 @@ def main():
                         np_kpi_i = normalize(np_kpi_i)
                         output = predict_newdata(model_i, np_kpi_i)
                         logging.info('Predicted interference ' + str(output))
-                        pickle.dump((np_kpi_i, output),
-                                    open('/home/interference_output__' + str(int(time.time() * 1e3)) + '.pkl', 'wb'))
+                        # pickle.dump((np_kpi_i, output),
+                        #            open('/home/interference_output__' + str(int(time.time() * 1e3)) + '.pkl', 'wb'))
 
                     # TODO: Add control messages to this logic
                     if this_class == 0:
                         if output == 0:
                             print('embb no interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('embb no interference \n')
                         if output == 1:
                             print('embb with interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('embb with interference \n')
                         if output == 2:
                             print('unexpected result: embb and cntrl')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('unexpected result: embb and cntrl \n')
                     if this_class == 1:
                         if output == 0:
                             print('mmtc no interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('mmtc no interference \n')
                         if output == 1:
                             print('mmtc with interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('mmtc with interference \n')
                         if output == 2:
                             print('unexpected result: mmtc and cntrl')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('unexpected result: mmtc and cntrl \n')
                     if this_class == 2:
                         if output == 0:
                             print('urllc no interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('urllc no interference \n')
                         if output == 1:
                             print('urllc with interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('urllc with interference \n')
                         if output == 2:
                             print('unexpected result: urllc and cntrl')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('unexpected result: urllc and cntrl \n')
                     if this_class == 3:
                         if output == 0:
                             print('unexpected result: cntrl no interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('unexpected result: cntrl no interference \n')
                         if output == 1:
                             print('unexpected result: cntrl with interference')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('unexpected result: cntrl with interference \n')
                         if output == 2:
-                            print('cntrl no interference')
-                        # with open('/home/kpi_log.txt', 'a') as f:
-                        #   f.write(str(np_kpi[:, :5]) + '\n')
+                            print('cntrl')
+                            with open('/home/kpi_log.txt', 'a') as f:
+                                f.write('cntrl \n')
+
 
 
 

@@ -47,7 +47,7 @@ while IFS= read -r line; do
     fi
 done < $1
 
-# Start the near-RT RIC
+echo "Starting the near-RT RIC"
 sshpass -p "ChangeMe" ssh $ric 'cd ~ && cd radio_code/colosseum-near-rt-ric/setup-scripts/ && ./setup-ric.sh col0'
 
 # connect the gNB and RIC
@@ -69,6 +69,7 @@ gnome-terminal -- bash -c "sshpass -p 'scope' ssh -t $gnb 'cd /root/radio_code/c
 #sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/ && ./run_odu.sh" &
 
 sleep 15
+clear -x
 
 echo "Starting the Near-RT RIC"
 GNBID=`sshpass -p "ChangeMe" ssh $ric "docker logs e2term | grep -Eo 'gnb:[0-9]+-[0-9]+-[0-9]+' | tail -1"`
@@ -86,14 +87,15 @@ echo "Starting the xApp"
 #sshpass -p "ChangeMe" ssh $ric 'docker exec -i sample-xapp-24 bash -c "rm /home/*.log && cd /home/sample-xapp/ && ./run_xapp_IMPACT.sh"' &
 gnome-terminal -- bash -c "sshpass -p 'ChangeMe' ssh $ric 'docker exec -i sample-xapp-24 bash -c \"rm /home/*.log && cd /home/sample-xapp/ && ./run_xapp_IMPACT.sh\"'; bash" &
 
+sleep 10
 echo "Starting the listener"
 sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9/--freq 1.020e9/' utils/uhd_rx_fft.sh"
 gnome-terminal -- bash -c "sshpass -p 'sunflower' ssh -t $listener 'sh utils/uhd_rx_fft.sh'; bash" &
 
-sleep 30
+sleep 20
 clear -x
 echo "Configured all SRNs"
-sleep 30
+sleep 20
 
 
 echo "Starting TGEN for demo UE"
@@ -408,8 +410,8 @@ sshpass -p "sunflower" ssh $interferer "kill -INT ${int_PID}"
 sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./$out_dir/
 
 #TODO: verify copy log file from xApp
-sshpass - p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/*.log /root/."
-sshpass -p "ChangeMe" scp $ric:/root/*.log ./$out_dir/
+sshpass - p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/*log* /root/."
+sshpass -p "ChangeMe" scp $ric:/root/*log* ./$out_dir/
 
 echo "All tests complete"
 kill $(jobs -p)
