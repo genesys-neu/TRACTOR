@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from python.ORAN_dataset import *
-from python.torch_train_ORAN_colosseum import ConvNN as global_model
+from python.ORAN_models import ConvNN as global_model
 import time
 from xapp_control import *
 
@@ -77,6 +77,8 @@ def main():
 
     control_sck = open_control_socket(4200)
 
+    first_pred_i = False
+    first_pred_c = False
     slice_len = 32
     Nclass = 4
     num_feats = 17
@@ -103,7 +105,7 @@ def main():
     rand_x = torch.Tensor(np.random.random((1, slice_len, num_feats)))
     rand_x = rand_x.to(device)
     pred = model(rand_x)
-    print('Dummy slice prediction', pred)
+    print('Dummy slice prediction', pred.argmax(1).numpy())
 
     model_i = torch.load('model/best_model_pytorch.pt')
     rand_i = np.random.random(20)
@@ -111,6 +113,7 @@ def main():
     print('Dummy interference prediction', pred_i)
 
     print('Start listening on E2 interface...')
+    logging.info('Finished initialization')
 
     count_pkl = 0
     cont_data_sck = ""
@@ -147,42 +150,49 @@ def main():
 
 
             data_sck = data_sck.replace(',,', ',')
-            data_sck_m = ''
+            data_sck = data_sck.split('\n')
+            if len(data_sck) > 1:
+                data_sck = data_sck[-2]
+            else:
+                data_sck = data_sck[-1]
+            logging.info("Cleaned data string to {}".format(data_sck))
 
-            if data_sck[0] == 'm':
-                # we need to recive more and piece together the whole message
-                while data_sck[0] == 'm':
-                    data_sck_m = data_sck_m + data_sck[1:]
-
-                    # get more data
-                    data_sck = receive_from_socket(control_sck)
-                    if len(data_sck) <= 0:
-                        if len(data_sck) == 0:
-                            # logging.info('Socket received 0')
-                            continue
-                        else:
-                            logging.info('Negative value for socket')
-                            break
-                    else:
-                        logging.info('Received data: ' + repr(data_sck))
-                        data_sck = data_sck.replace(',,', ',')
-
-                # now we have to get the final message without an m
-                data_sck = receive_from_socket(control_sck)
-                if len(data_sck) <= 0:
-                    if len(data_sck) == 0:
-                        # logging.info('Socket received 0')
-                        continue
-                    else:
-                        logging.info('Negative value for socket')
-                        break
-                else:
-                    logging.info('Received data: ' + repr(data_sck))
-                    data_sck = data_sck.replace(',,', ',')
-                data_sck_m = data_sck_m + data_sck
-
-                #finally rename for the rest of the program
-                data_sck = data_sck_m
+            # data_sck_m = ''
+            #
+            # if data_sck[0] == 'm':
+            #     logging.info("we need to recive more and piece together the whole message")
+            #     while data_sck[0] == 'm':
+            #         data_sck_m = data_sck_m + data_sck[1:]
+            #
+            #         # get more data
+            #         data_sck = receive_from_socket(control_sck)
+            #         if len(data_sck) <= 0:
+            #             if len(data_sck) == 0:
+            #                 # logging.info('Socket received 0')
+            #                 continue
+            #             else:
+            #                 logging.info('Negative value for socket')
+            #                 break
+            #         else:
+            #             logging.info('Received data: ' + repr(data_sck))
+            #             data_sck = data_sck.replace(',,', ',')
+            #
+            #     # now we have to get the final message without an m
+            #     data_sck = receive_from_socket(control_sck)
+            #     if len(data_sck) <= 0:
+            #         if len(data_sck) == 0:
+            #             # logging.info('Socket received 0')
+            #             continue
+            #         else:
+            #             logging.info('Negative value for socket')
+            #             break
+            #     else:
+            #         logging.info('Received data: ' + repr(data_sck))
+            #         data_sck = data_sck.replace(',,', ',')
+            #     data_sck_m = data_sck_m + data_sck
+            #
+            #     #finally rename for the rest of the program
+            #     data_sck = data_sck_m
 
             kpi_new = np.fromstring(data_sck, sep=',')
             if kpi_new.shape[0] < 31:
@@ -193,19 +203,24 @@ def main():
             # check to see if the recently received KPI is actually new
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
 
-            if kpi_new[2] == 1010123456002:
+            logging.info("Recieved KPI from {}".format(kpi_new[2]))
+            if int(kpi_new[2]) == 1010123456002:
+                logging.info("UE matches")
                 curr_timestamp = kpi_new[0]
+                logging.info("current timestamp is {}".format(curr_timestamp))
                 # let's remove the KPIs we don't need
                 kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
                 # interference needs [16, 19, 23, 21]
                 kpi_filt_i = kpi_new[np.array([16, 19, 23, 21])]
+                logging.info("last timestamp is {}".format(last_timestamp))
 
                 if curr_timestamp > last_timestamp:
+                    logging.info('Update timestamp')
                     last_timestamp = curr_timestamp
 
                     # first do traffic class prediction
                     if len(kpi) < slice_len:
-                        # if the incoming KPI list is empty, just add the incoming KPIs
+                        logging.info("if the incoming KPI list is empty, just add the incoming KPIs")
                         kpi.append(kpi_filt)
                     else:
                         # to insert, we pop the first element of the list
@@ -229,9 +244,11 @@ def main():
                             pred = model(t_kpi)
                             this_class = pred.argmax(1)
                             logging.info('Predicted class ' + str(pred.argmax(1)))
-                            pickle.dump((np_kpi, this_class),
-                                        open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
+                            # pickle.dump((np_kpi, this_class),
+                            #             open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
                             count_pkl += 1
+                            this_class = float(this_class.numpy())
+                            first_pred_c = True
                         except:
                             logging.info('ERROR while predicting class')
 
@@ -243,42 +260,45 @@ def main():
                         kpi_i.append(kpi_filt_i)
                         np_kpi_i = np.array(kpi_i)
                         np_kpi_i = normalize(np_kpi_i)
-                        output = predict_newdata(model_i, np_kpi_i)
-                        logging.info('Predicted interference ' + str(output))
-                        pickle.dump((np_kpi_i, output),
-                                    open('/home/interference_output__' + str(int(time.time() * 1e3)) + '.pkl', 'wb'))
+                        try:
+                            output = predict_newdata(model_i, np_kpi_i)
+                            logging.info('Predicted interference ' + str(output))
+                            first_pred_i = True
+                        except:
+                            logging.info('ERROR while predicting interference')
+                        # pickle.dump((np_kpi_i, output),
+                        #            open('/home/interference_output__' + str(int(time.time() * 1e3)) + '.pkl', 'wb'))
 
-                    # TODO: Add logic here to send control messages
-                    if this_class == 0:
-                        if output == 0:
-                            print('embb no interference')
-                        if output == 1:
-                            print('embb with interference')
-                        if output == 2:
-                            print('unexpected result: embb and cntrl')
-                    if this_class == 1:
-                        if output == 0:
-                            print('mmtc no interference')
-                        if output == 1:
-                            print('mmtc with interference')
-                        if output == 2:
-                            print('unexpected result: mmtc and cntrl')
-                    if this_class == 2:
-                        if output == 0:
-                            print('urllc no interference')
-                        if output == 1:
-                            print('urllc with interference')
-                        if output == 2:
-                            print('unexpected result: urllc and cntrl')
-                    if this_class == 3:
-                        if output == 0:
-                            print('unexpected result: cntrl no interference')
-                        if output == 1:
-                            print('unexpected result: cntrl with interference')
-                        if output == 2:
-                            print('cntrl no interference')
-                        # with open('/home/kpi_log.txt', 'a') as f:
-                        #   f.write(str(np_kpi[:, :5]) + '\n')
+                    # TODO: Add control messages to this logic
+                    if first_pred_c and first_pred_i:
+                        if this_class == 0:
+                            if output == 0:
+                                logging.info('embb no interference')
+                            if output == 1:
+                                logging.info('embb with interference')
+                            if output == 2:
+                                logging.info('unexpected result: embb and cntrl')
+                        if this_class == 1:
+                            if output == 0:
+                                logging.info('mmtc no interference')
+                            if output == 1:
+                                logging.info('mmtc with interference')
+                            if output == 2:
+                                logging.info('unexpected result: mmtc and cntrl')
+                        if this_class == 2:
+                            if output == 0:
+                                logging.info('urllc no interference')
+                            if output == 1:
+                                logging.info('urllc with interference')
+                            if output == 2:
+                                logging.info('unexpected result: urllc and cntrl')
+                        if this_class == 3:
+                            if output == 0:
+                                logging.info('unexpected result: cntrl no interference')
+                            if output == 1:
+                                logging.info('unexpected result: cntrl with interference')
+                            if output == 2:
+                                logging.info('cntrl')
 
 
 

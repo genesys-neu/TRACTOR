@@ -63,7 +63,7 @@ docker exec -it sample-xapp-24 bash
 cd /home/sample-xapp/
 ./run_xapp.sh <model_path> <norm_param_path> <model_type>
 ```
-and wait until the app init is complete.
+and wait until the app init is complete. NOTE: the paths passed as arguments have to reference files placed in docker container running the xApp.
 
 ### Replay 5G traffic traces
 To automatically run traffic generation, you can use :
