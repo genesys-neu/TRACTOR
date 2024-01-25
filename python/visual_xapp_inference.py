@@ -321,6 +321,7 @@ if __name__ == "__main__":
             filt_kpi_offset = slice_len # TODO we are only saving the last raw KPI in xapp code
                                         #   momentarily... we skip the first "slice_len" samples
             txt_output = ""
+            norm_values_CTRL_alleged = []
             for t in range(kpis_raw.shape[0]):  # iterate over the size of raw kpis and account for the offset of filtered ones
                 #print('kpis_raw[',t,']')
                 if t + args.slicelen < kpis_raw.shape[0]:
@@ -381,6 +382,13 @@ if __name__ == "__main__":
                         # the more conservative is the relabeling. This threshold is computed based on the distribution of euclidean
                         # distances computed between the mean CTRL sample (assuming they look very similar)
                         # and every sample of every other class
+
+                        #print(t); plt.imshow(np.squeeze(input_sample_filtd_norm)); plt.colorbar(); plt.show()
+                        if norm >= relabel_norm_threshold and co == classmap['ctrl']:
+                            norm_values_CTRL_alleged.append(norm)
+                            #if norm < 3:
+                            #    print(t); plt.imshow(np.squeeze(input_sample_filtd_norm)); plt.colorbar(); plt.show()
+
                         if norm < relabel_norm_threshold:
                             num_heuristic_ctrl += 1
                             # plt.imshow(obs_excludecols)
