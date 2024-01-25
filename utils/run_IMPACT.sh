@@ -1,5 +1,5 @@
 #!/bin/bash
-## HOW TO RUN: ./setup_tgen.sh config_file.txt
+## HOW TO RUN: ./run_IMPACT.sh config_file.txt
 ## Ensure the gNB is the first SRN in config_file.txt
 ## Then there should be 8 UEs
 ## Then there should be the interferer

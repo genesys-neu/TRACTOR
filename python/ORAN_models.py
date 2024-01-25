@@ -26,7 +26,7 @@ class ConvNN(nn.Module):
         ## initialize first (and only) set of FC => RELU layers
 
         # pass a random input
-        rand_x = torch.Tensor(np.random.random((1, slice_len, num_feats)))
+        rand_x = torch.Tensor(np.random.random((1, 1, slice_len, num_feats)))
         output_size = torch.flatten(self.conv1(rand_x)).shape
         self.fc1 = nn.Linear(in_features=output_size.numel(), out_features=512)
         self.relu3 = nn.ReLU()
