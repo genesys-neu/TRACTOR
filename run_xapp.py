@@ -31,6 +31,7 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
 
     # initialize the KPI matrix
     kpi = []
+    kpi_raw = []
     last_timestamp = 0
     curr_timestamp = 0
 
@@ -127,18 +128,22 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
             curr_timestamp = kpi_new[0] # first feature is timestamp
 
             if curr_timestamp > last_timestamp:
-                kpi_raw = kpi_new.copy()
+
                 # let's remove the KPIs we don't need
                 kpi_filt = kpi_new[indexes_to_keep]
                 last_timestamp = curr_timestamp
                 if len(kpi) < slice_len:
                     # if the incoming KPI list is empty, just add the incoming KPIs
                     kpi.append(kpi_filt)
+                    kpi_raw.append(kpi_new.copy())
                 else:
                     # to insert, we pop the first element of the list
                     kpi.pop(0)
                     # and append the last incoming KPI set
                     kpi.append(kpi_filt)
+                    # same thing with raw kpis (for post processing/replay)
+                    kpi_raw.pop(0)
+                    kpi_raw.append(kpi_new.copy())
                     # here we have the new input ready for the ML model
                     # let's create a numpy array
                     np_kpi = np.array(kpi)

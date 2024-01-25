@@ -203,7 +203,6 @@ def gen_slice_dataset(trials, data_path, slice_len=4, train_valid_ratio=0.8,
             },
             'labels': torch.Tensor(trials_lbl[n_train:n_train+n_valid]).type(torch.LongTensor)
         }
-
     }
 
     return trials_ds, columns_maxmin
@@ -489,7 +488,8 @@ def load_csv_dataset__single(data_path, trial, isControlClass=True, isRaw=False)
     # drop specific columns
     # from chat with Josh:
     #   [15/11/22 17:44] Mauro Belgiovine
-    #       Joshua Groen is it possible that in Trial2, mmtc data have an additional column? I see there is ul_rssi that I haven't seen in any other f
+    #       Joshua Groen is it possible that in Trial2, mmtc data have an additional column?
+    #       I see there is ul_rssi that I haven't seen in any other file
     #   [15/11/22 17:51] Joshua Groen
     #       ul_rssi does not work; it should be deleted. It is possible I missed something
     if not isRaw:
