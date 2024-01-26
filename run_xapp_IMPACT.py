@@ -79,10 +79,10 @@ def main():
 
     first_pred_i = False
     first_pred_c = False
-    slice_len = 32
+    slice_len = 16
     Nclass = 4
     num_feats = 17
-    torch_model_path = 'model/model_weights__slice32.pt'
+    torch_model_path = 'model/model_weights__slice16.pt'
     norm_param_path = 'model/cols_maxmin.pkl'
     colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
     # initialize the KPI matrix (4 samples, 19 KPIs each)
@@ -128,7 +128,7 @@ def main():
                 logging.info('Negative value for socket')
                 break
         else:
-            logging.info('Received data: ' + repr(data_sck))
+            # logging.info('Received data: ' + repr(data_sck))
             # with open('/home/kpi_new_log.txt', 'a') as f:
             #     f.write('{}\n'.format(data_sck))
 
@@ -155,44 +155,47 @@ def main():
                 data_sck = data_sck[-2]
             else:
                 data_sck = data_sck[-1]
-            logging.info("Cleaned data string to {}".format(data_sck))
+            # logging.info("Cleaned data string to {}".format(data_sck))
 
-            # data_sck_m = ''
-            #
-            # if data_sck[0] == 'm':
-            #     logging.info("we need to recive more and piece together the whole message")
-            #     while data_sck[0] == 'm':
-            #         data_sck_m = data_sck_m + data_sck[1:]
-            #
-            #         # get more data
-            #         data_sck = receive_from_socket(control_sck)
-            #         if len(data_sck) <= 0:
-            #             if len(data_sck) == 0:
-            #                 # logging.info('Socket received 0')
-            #                 continue
-            #             else:
-            #                 logging.info('Negative value for socket')
-            #                 break
-            #         else:
-            #             logging.info('Received data: ' + repr(data_sck))
-            #             data_sck = data_sck.replace(',,', ',')
-            #
-            #     # now we have to get the final message without an m
-            #     data_sck = receive_from_socket(control_sck)
-            #     if len(data_sck) <= 0:
-            #         if len(data_sck) == 0:
-            #             # logging.info('Socket received 0')
-            #             continue
-            #         else:
-            #             logging.info('Negative value for socket')
-            #             break
-            #     else:
-            #         logging.info('Received data: ' + repr(data_sck))
-            #         data_sck = data_sck.replace(',,', ',')
-            #     data_sck_m = data_sck_m + data_sck
-            #
-            #     #finally rename for the rest of the program
-            #     data_sck = data_sck_m
+            # the following code is not really needed
+            """
+            data_sck_m = ''
+
+            if data_sck[0] == 'm':
+                logging.info("we need to recive more and piece together the whole message")
+                while data_sck[0] == 'm':
+                    data_sck_m = data_sck_m + data_sck[1:]
+
+                    # get more data
+                    data_sck = receive_from_socket(control_sck)
+                    if len(data_sck) <= 0:
+                        if len(data_sck) == 0:
+                            # logging.info('Socket received 0')
+                            continue
+                        else:
+                            logging.info('Negative value for socket')
+                            break
+                    else:
+                        logging.info('Received data: ' + repr(data_sck))
+                        data_sck = data_sck.replace(',,', ',')
+
+                # now we have to get the final message without an m
+                data_sck = receive_from_socket(control_sck)
+                if len(data_sck) <= 0:
+                    if len(data_sck) == 0:
+                        # logging.info('Socket received 0')
+                        continue
+                    else:
+                        logging.info('Negative value for socket')
+                        break
+                else:
+                    logging.info('Received data: ' + repr(data_sck))
+                    data_sck = data_sck.replace(',,', ',')
+                data_sck_m = data_sck_m + data_sck
+
+                #finally rename for the rest of the program
+                data_sck = data_sck_m
+            """
 
             kpi_new = np.fromstring(data_sck, sep=',')
             if kpi_new.shape[0] < 31:
@@ -203,19 +206,19 @@ def main():
             # check to see if the recently received KPI is actually new
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
 
-            logging.info("Recieved KPI from {}".format(kpi_new[2]))
+            # logging.info("Recieved KPI from {}".format(kpi_new[2]))
             if int(kpi_new[2]) == 1010123456002:
-                logging.info("UE matches")
+                # logging.info("UE matches")
                 curr_timestamp = kpi_new[0]
-                logging.info("current timestamp is {}".format(curr_timestamp))
+                # logging.info("current timestamp is {}".format(curr_timestamp))
                 # let's remove the KPIs we don't need
                 kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
                 # interference needs [16, 19, 23, 21]
                 kpi_filt_i = kpi_new[np.array([16, 19, 23, 21])]
-                logging.info("last timestamp is {}".format(last_timestamp))
+                # logging.info("last timestamp is {}".format(last_timestamp))
 
                 if curr_timestamp > last_timestamp:
-                    logging.info('Update timestamp')
+                    # logging.info('Update timestamp')
                     last_timestamp = curr_timestamp
 
                     # first do traffic class prediction
@@ -234,16 +237,16 @@ def main():
                         assert (np_kpi.shape[1] == len(list(colsparam_dict.keys())))
                         for c in range(np_kpi.shape[1]):
                             print('*****', c, '*****')
-                            logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
+                            # logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
                             np_kpi[:, c] = (np_kpi[:, c] - colsparam_dict[c]['min']) / (
                                         colsparam_dict[c]['max'] - colsparam_dict[c]['min'])
-                            logging.info('Normalized vector: '+repr(np_kpi[:, c]))
+                            # logging.info('Normalized vector: '+repr(np_kpi[:, c]))
                         # and then pass it to our model as a torch tensor
                         t_kpi = torch.Tensor(np_kpi.reshape(1, np_kpi.shape[0], np_kpi.shape[1])).to(device)
                         try:
                             pred = model(t_kpi)
                             this_class = pred.argmax(1)
-                            logging.info('Predicted class ' + str(pred.argmax(1)))
+                            # logging.info('Predicted class ' + str(pred.argmax(1)))
                             # pickle.dump((np_kpi, this_class),
                             #             open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
                             count_pkl += 1
@@ -262,7 +265,7 @@ def main():
                         np_kpi_i = normalize(np_kpi_i)
                         try:
                             output = predict_newdata(model_i, np_kpi_i)
-                            logging.info('Predicted interference ' + str(output))
+                            # logging.info('Predicted interference ' + str(output))
                             first_pred_i = True
                         except:
                             logging.info('ERROR while predicting interference')
