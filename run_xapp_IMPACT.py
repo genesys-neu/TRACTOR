@@ -148,17 +148,8 @@ def main():
                 isCont = False
             """
 
-
-            data_sck = data_sck.replace(',,', ',')
-            data_sck = data_sck.split('\n')
-            if len(data_sck) > 1:
-                data_sck = data_sck[-2]
-            else:
-                data_sck = data_sck[-1]
-            logging.info("Cleaned data string to {}".format(data_sck))
-
             # is the following code is not really needed?
-
+            """
             data_sck_m = ''
 
             if data_sck[0] == 'm':
@@ -202,6 +193,17 @@ def main():
                 logging.info('Discarding KPI: too short ')
                 continue # discard incomplete KPIs
                         # [TODO] this is to address the multiple 'm' case, but not ideal like this
+            """
+
+            data_sck = data_sck.split('\n')
+            if len(data_sck) > 2:
+                data_sck = data_sck[-2]
+            elif len(data_sck) > 1:
+                data_sck = data_sck[-1]
+
+            data_sck = data_sck.replace(',,', ',')
+            logging.info("Cleaned data string to {}".format(data_sck))
+
 
             # check to see if the recently received KPI is actually new
             # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
