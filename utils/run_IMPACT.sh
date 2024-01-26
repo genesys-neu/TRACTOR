@@ -92,10 +92,10 @@ echo "Starting the listener"
 sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9 --rate 1e6/--freq 1.020e9 --rate 2e7/' utils/uhd_rx_fft.sh"
 gnome-terminal -- bash -c "sshpass -p 'sunflower' ssh -t $listener 'sh utils/uhd_rx_fft.sh'; bash" &
 
-sleep 20
+sleep 25
 clear -x
 echo "Configured all SRNs"
-sleep 20
+sleep 25
 
 
 echo "Starting TGEN for demo UE"
@@ -413,6 +413,5 @@ sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metri
 sshpass -p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/xapp-logger.log /root/."
 sshpass -p "ChangeMe" scp $ric:/root/*.log ./$out_dir/
 
-echo "All tests complete"
 kill $(jobs -p)
-
+echo "All tests complete"

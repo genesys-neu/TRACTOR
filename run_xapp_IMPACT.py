@@ -128,7 +128,7 @@ def main():
                 logging.info('Negative value for socket')
                 break
         else:
-            # logging.info('Received data: ' + repr(data_sck))
+            logging.info('Received data: ' + repr(data_sck))
             # with open('/home/kpi_new_log.txt', 'a') as f:
             #     f.write('{}\n'.format(data_sck))
 
@@ -155,10 +155,10 @@ def main():
                 data_sck = data_sck[-2]
             else:
                 data_sck = data_sck[-1]
-            # logging.info("Cleaned data string to {}".format(data_sck))
+            logging.info("Cleaned data string to {}".format(data_sck))
 
-            # the following code is not really needed
-            """
+            # is the following code is not really needed?
+
             data_sck_m = ''
 
             if data_sck[0] == 'm':
@@ -195,7 +195,7 @@ def main():
 
                 #finally rename for the rest of the program
                 data_sck = data_sck_m
-            """
+
 
             kpi_new = np.fromstring(data_sck, sep=',')
             if kpi_new.shape[0] < 31:
