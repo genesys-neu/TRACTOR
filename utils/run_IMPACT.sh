@@ -42,7 +42,7 @@ while IFS= read -r line; do
       sshpass -p "scope" scp ../traffic_gen.py $line:/root/traffic_gen/
       sshpass -p "scope" ssh $line "cd /root/radio_api && python3 scope_start.py --config-file radio_IMPACT.conf" &
       sshpass -p "scope" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'model' ../../TRACTOR $line:/root/.
-      sleep 2
+      sleep 3
       clear -x
     fi
 done < $1
@@ -89,7 +89,7 @@ gnome-terminal -- bash -c "sshpass -p 'ChangeMe' ssh $ric 'docker exec -i sample
 
 sleep 10
 echo "Starting the listener"
-sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9/--freq 1.020e9/' utils/uhd_rx_fft.sh"
+sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9 --rate 1e6/--freq 1.020e9 --rate 2e7/' utils/uhd_rx_fft.sh"
 gnome-terminal -- bash -c "sshpass -p 'sunflower' ssh -t $listener 'sh utils/uhd_rx_fft.sh'; bash" &
 
 sleep 20
