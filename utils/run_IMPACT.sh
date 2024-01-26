@@ -61,14 +61,14 @@ sshpass -p "scope" scp ../colosseum/radio_code/colosseum-scope-e2/run_odu.sh $gn
 sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/src/du_app/ && g++ readLastMetrics.cpp -o readLastMetrics.o"
 sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/ && sed -i 's/172.30.199.202/${IPCOL0}/' build_odu.sh && ./build_odu.sh clean" # && ./run_odu.sh
 
-sleep 10
+sleep 20
 clear -x
 # Start the ODU
 echo "Starting the ODU"
 gnome-terminal -- bash -c "sshpass -p 'scope' ssh -t $gnb 'cd /root/radio_code/colosseum-scope-e2/ && ./run_odu.sh'; bash" &
 #sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/ && ./run_odu.sh" &
 
-sleep 15
+sleep 20
 clear -x
 
 echo "Starting the Near-RT RIC"
@@ -87,7 +87,7 @@ echo "Starting the xApp"
 #sshpass -p "ChangeMe" ssh $ric 'docker exec -i sample-xapp-24 bash -c "rm /home/*.log && cd /home/sample-xapp/ && ./run_xapp_IMPACT.sh"' &
 gnome-terminal -- bash -c "sshpass -p 'ChangeMe' ssh $ric 'docker exec -i sample-xapp-24 bash -c \"rm /home/*.log && cd /home/sample-xapp/ && ./run_xapp_IMPACT.sh\"'; bash" &
 
-sleep 10
+sleep 20
 echo "Starting the listener"
 sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9 --rate 1e6/--freq 1.020e9 --rate 2e7/' utils/uhd_rx_fft.sh"
 gnome-terminal -- bash -c "sshpass -p 'sunflower' ssh -t $listener 'sh utils/uhd_rx_fft.sh'; bash" &
@@ -410,8 +410,8 @@ sshpass -p "sunflower" ssh $interferer "kill -INT ${int_PID}"
 sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./$out_dir/
 
 #TODO: verify copy log file from xApp
-sshpass - p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/*log* /root/."
-sshpass -p "ChangeMe" scp $ric:/root/*log* ./$out_dir/
+sshpass -p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/xapp-logger.log /root/."
+sshpass -p "ChangeMe" scp $ric:/root/*.log ./$out_dir/
 
 echo "All tests complete"
 kill $(jobs -p)
