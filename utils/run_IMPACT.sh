@@ -42,7 +42,7 @@ while IFS= read -r line; do
       sshpass -p "scope" scp ../traffic_gen.py $line:/root/traffic_gen/
       sshpass -p "scope" ssh $line "cd /root/radio_api && python3 scope_start.py --config-file radio_IMPACT.conf" &
       sshpass -p "scope" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'model' ../../TRACTOR $line:/root/.
-      sleep 3
+      sleep 5
       clear -x
     fi
 done < $1
