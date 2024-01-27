@@ -69,7 +69,6 @@ gnome-terminal -- bash -c "sshpass -p 'scope' ssh -t $gnb 'cd /root/radio_code/c
 #sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/ && ./run_odu.sh" &
 
 sleep 20
-clear -x
 
 echo "Starting the Near-RT RIC"
 GNBID=`sshpass -p "ChangeMe" ssh $ric "docker logs e2term | grep -Eo 'gnb:[0-9]+-[0-9]+-[0-9]+' | tail -1"`
@@ -77,6 +76,7 @@ echo "The gnb ID is: $GNBID"
 sshpass -p "ChangeMe" ssh $ric "cd /root/radio_code/colosseum-near-rt-ric/setup-scripts && ./setup-sample-xapp.sh ${GNBID}"
 
 sleep 15
+clear -x
 
 echo "Copying files to the xApp"
 sshpass -p "ChangeMe" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs/*UE/' --exclude 'utils/raw' --exclude 'raw' ../../TRACTOR $ric:/root/.

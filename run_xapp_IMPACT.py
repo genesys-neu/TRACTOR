@@ -148,8 +148,8 @@ def main():
                 isCont = False
             """
 
-            # is the following code is not really needed?
-            """
+            # is the following code really needed?
+
             data_sck_m = ''
 
             if data_sck[0] == 'm':
@@ -187,14 +187,6 @@ def main():
                 #finally rename for the rest of the program
                 data_sck = data_sck_m
 
-
-            kpi_new = np.fromstring(data_sck, sep=',')
-            if kpi_new.shape[0] < 31:
-                logging.info('Discarding KPI: too short ')
-                continue # discard incomplete KPIs
-                        # [TODO] this is to address the multiple 'm' case, but not ideal like this
-            """
-
             data_sck = data_sck.split('\n')
             if len(data_sck) > 2:
                 data_sck = data_sck[-2]
@@ -202,6 +194,14 @@ def main():
                 data_sck = data_sck[-1]
 
             data_sck = data_sck.replace(',,', ',')
+
+            kpi_new = np.fromstring(data_sck, sep=',')
+            if kpi_new.shape[0] < 31:
+                logging.info('Discarding KPI: too short ')
+                continue # discard incomplete KPIs
+                        # [TODO] this is to address the multiple 'm' case, but not ideal like this
+
+
             logging.info("Cleaned data string to {}".format(data_sck))
 
 
