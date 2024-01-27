@@ -92,10 +92,10 @@ echo "Starting the listener"
 sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9 --rate 1e6/--freq 1.020e9 --rate 2e7/' utils/uhd_rx_fft.sh"
 gnome-terminal -- bash -c "sshpass -p 'sunflower' ssh -t $listener 'sh utils/uhd_rx_fft.sh'; bash" &
 
-sleep 25
+sleep 30
 clear -x
 echo "Configured all SRNs"
-sleep 25
+sleep 30
 
 
 echo "Starting TGEN for demo UE"
