@@ -42,7 +42,12 @@ while IFS= read -r line; do
       sshpass -p "scope" scp ../traffic_gen.py $line:/root/traffic_gen/
       sshpass -p "scope" ssh $line "cd /root/radio_api && python3 scope_start.py --config-file radio_IMPACT.conf" &
       sshpass -p "scope" rsync -av -e ssh --exclude 'colosseum*' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'model' ../../TRACTOR $line:/root/.
-      sleep 5
+      if [ $line = $gnb ]
+      then
+        echo "Letting the gNB start"
+        sleep 15
+      fi
+      sleep 2
       clear -x
     fi
 done < $1
@@ -79,7 +84,7 @@ sleep 15
 clear -x
 
 echo "Copying files to the xApp"
-sshpass -p "ChangeMe" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs/*UE/' --exclude 'utils/raw' --exclude 'raw' ../../TRACTOR $ric:/root/.
+sshpass -p "ChangeMe" rsync -av -e ssh --exclude 'colosseum*' --exclude '.git' --exclude 'logs/*UE/' --exclude 'utils/raw' --exclude 'raw' ../../TRACTOR $ric:/root/.
 sshpass -p "ChangeMe" ssh $ric 'docker cp /root/TRACTOR sample-xapp-24:/home/sample-xapp/.'
 sshpass -p "ChangeMe" ssh $ric 'docker exec sample-xapp-24 mv /home/sample-xapp/TRACTOR/utils/run_xapp_IMPACT.sh /home/sample-xapp/. && docker exec sample-xapp-24 chmod +x /home/sample-xapp/run_xapp_IMPACT.sh'
 

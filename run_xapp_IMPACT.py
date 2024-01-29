@@ -130,7 +130,7 @@ def main():
                 logging.info('ERROR, negative value for socket - terminating')
                 break
         else:
-            logging.info('Received data: ' + repr(data_sck))
+            # logging.info('Received data: ' + repr(data_sck))
             # with open('/home/kpi_new_log.txt', 'a') as f:
             #     f.write('{}\n'.format(data_sck))
 
@@ -143,10 +143,10 @@ def main():
 
             kpi_new = np.fromstring(data_sck, sep=',')
             if kpi_new.shape[0] < 31:
-                logging.info('Discarding KPI: too short ')
+                # logging.info('Discarding KPI: too short ')
                 continue  # discard incomplete KPIs
 
-            logging.info("Cleaned data: {}".format(data_sck))
+            # logging.info("Cleaned data: {}".format(data_sck))
 
             # logging.info("Recieved KPI from {}".format(kpi_new[2]))
             if int(kpi_new[2]) == 1010123456002:
