@@ -79,10 +79,10 @@ def main():
 
     first_pred_i = False
     first_pred_c = False
-    slice_len = 32
+    slice_len = 16
     Nclass = 4
     num_feats = 17
-    torch_model_path = 'model/model_weights__slice32.pt'
+    torch_model_path = 'model/model_weights__slice16.pt'
     norm_param_path = 'model/cols_maxmin.pkl'
     colsparam_dict = pickle.load(open(norm_param_path, 'rb'))
     # initialize the KPI matrix (4 samples, 19 KPIs each)
@@ -91,6 +91,8 @@ def main():
     kpi_i = []
     last_timestamp = 0
     curr_timestamp = 0
+    this_class = 0
+    output = 0
 
     # initialize the ML model
     print('Init ML models...')
@@ -122,105 +124,47 @@ def main():
         data_sck = receive_from_socket(control_sck)
         if len(data_sck) <= 0:
             if len(data_sck) == 0:
-                #logging.info('Socket received 0')
+                # logging.info('Socket received 0')
                 continue
             else:
-                logging.info('Negative value for socket')
+                logging.info('ERROR, negative value for socket - terminating')
                 break
         else:
-            logging.info('Received data: ' + repr(data_sck))
+            # logging.info('Received data: ' + repr(data_sck))
             # with open('/home/kpi_new_log.txt', 'a') as f:
             #     f.write('{}\n'.format(data_sck))
 
-            """
-            if data_sck[0] == 'm':
-                print('Multiple recv')  # TODO handle this case
-                if not isCont:
-                    isCont = True   # activate continue mode
-                    cont_data_sck = data_sck[1:]    # init the string
-                else:    # we are already in continue mode
-                    cont_data_sck += data_sck[1:]
-                continue    # don't process the string and continue appending
-            elif isCont:
-                cont_data_sck += data_sck
-                data_sck = cont_data_sck
-                cont_data_sck = ""
-                isCont = False
-            """
-
-
             data_sck = data_sck.replace(',,', ',')
             data_sck = data_sck.split('\n')
-            if len(data_sck) > 1:
-                data_sck = data_sck[-2]
+            if data_sck[0][0] == 'm':
+                data_sck = data_sck[0][1:]
             else:
-                data_sck = data_sck[-1]
-            logging.info("Cleaned data string to {}".format(data_sck))
-
-            # data_sck_m = ''
-            #
-            # if data_sck[0] == 'm':
-            #     logging.info("we need to recive more and piece together the whole message")
-            #     while data_sck[0] == 'm':
-            #         data_sck_m = data_sck_m + data_sck[1:]
-            #
-            #         # get more data
-            #         data_sck = receive_from_socket(control_sck)
-            #         if len(data_sck) <= 0:
-            #             if len(data_sck) == 0:
-            #                 # logging.info('Socket received 0')
-            #                 continue
-            #             else:
-            #                 logging.info('Negative value for socket')
-            #                 break
-            #         else:
-            #             logging.info('Received data: ' + repr(data_sck))
-            #             data_sck = data_sck.replace(',,', ',')
-            #
-            #     # now we have to get the final message without an m
-            #     data_sck = receive_from_socket(control_sck)
-            #     if len(data_sck) <= 0:
-            #         if len(data_sck) == 0:
-            #             # logging.info('Socket received 0')
-            #             continue
-            #         else:
-            #             logging.info('Negative value for socket')
-            #             break
-            #     else:
-            #         logging.info('Received data: ' + repr(data_sck))
-            #         data_sck = data_sck.replace(',,', ',')
-            #     data_sck_m = data_sck_m + data_sck
-            #
-            #     #finally rename for the rest of the program
-            #     data_sck = data_sck_m
+                data_sck = data_sck[0][0:]
 
             kpi_new = np.fromstring(data_sck, sep=',')
             if kpi_new.shape[0] < 31:
-                logging.info('Discarding KPI: too short ')
-                continue # discard incomplete KPIs
-                        # [TODO] this is to address the multiple 'm' case, but not ideal like this
+                # logging.info('Discarding KPI: too short ')
+                continue  # discard incomplete KPIs
 
-            # check to see if the recently received KPI is actually new
-            # kpi_process = kpi_new[np.array([0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
+            # logging.info("Cleaned data: {}".format(data_sck))
 
-            logging.info("Recieved KPI from {}".format(kpi_new[2]))
+            # logging.info("Recieved KPI from {}".format(kpi_new[2]))
             if int(kpi_new[2]) == 1010123456002:
-                logging.info("UE matches")
+                # logging.info("UE matches")
                 curr_timestamp = kpi_new[0]
-                logging.info("current timestamp is {}".format(curr_timestamp))
-                # let's remove the KPIs we don't need
-                kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
-                # interference needs [16, 19, 23, 21]
-                kpi_filt_i = kpi_new[np.array([16, 19, 23, 21])]
-                logging.info("last timestamp is {}".format(last_timestamp))
-
+                # logging.info("current timestamp is {}".format(curr_timestamp))
+                # logging.info("last timestamp is {}".format(last_timestamp))
                 if curr_timestamp > last_timestamp:
-                    logging.info('Update timestamp')
+                    # let's remove the KPIs we don't need
+                    kpi_filt = kpi_new[np.array([9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 30])]
+                    # interference needs [16, 19, 23, 21]
+                    kpi_filt_i = kpi_new[np.array([16, 19, 23, 21])]
+                    # logging.info('Update timestamp')
                     last_timestamp = curr_timestamp
 
                     # first do traffic class prediction
                     if len(kpi) < slice_len:
-                        logging.info("if the incoming KPI list is empty, just add the incoming KPIs")
+                        # logging.info("if the incoming KPI list is empty, just add the incoming KPIs")
                         kpi.append(kpi_filt)
                     else:
                         # to insert, we pop the first element of the list
@@ -233,20 +177,20 @@ def main():
                         # let's normalize each columns based on the params derived while training
                         assert (np_kpi.shape[1] == len(list(colsparam_dict.keys())))
                         for c in range(np_kpi.shape[1]):
-                            print('*****', c, '*****')
-                            logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
+                            # print('*****', c, '*****')
+                            # logging.info('Un-normalized vector'+repr(np_kpi[:, c]))
                             np_kpi[:, c] = (np_kpi[:, c] - colsparam_dict[c]['min']) / (
                                         colsparam_dict[c]['max'] - colsparam_dict[c]['min'])
-                            logging.info('Normalized vector: '+repr(np_kpi[:, c]))
+                            # logging.info('Normalized vector: '+repr(np_kpi[:, c]))
                         # and then pass it to our model as a torch tensor
                         t_kpi = torch.Tensor(np_kpi.reshape(1, np_kpi.shape[0], np_kpi.shape[1])).to(device)
                         try:
                             pred = model(t_kpi)
                             this_class = pred.argmax(1)
-                            logging.info('Predicted class ' + str(pred.argmax(1)))
+                            # logging.info('Predicted class ' + str(pred.argmax(1)))
                             # pickle.dump((np_kpi, this_class),
                             #             open('/home/class_output__'+str(int(time.time()*1e3))+'.pkl', 'wb'))
-                            count_pkl += 1
+                            # count_pkl += 1
                             this_class = float(this_class.numpy())
                             first_pred_c = True
                         except:
@@ -262,7 +206,7 @@ def main():
                         np_kpi_i = normalize(np_kpi_i)
                         try:
                             output = predict_newdata(model_i, np_kpi_i)
-                            logging.info('Predicted interference ' + str(output))
+                            # logging.info('Predicted interference ' + str(output))
                             first_pred_i = True
                         except:
                             logging.info('ERROR while predicting interference')
@@ -299,7 +243,6 @@ def main():
                                 logging.info('unexpected result: cntrl with interference')
                             if output == 2:
                                 logging.info('cntrl')
-
 
 
 if __name__ == '__main__':

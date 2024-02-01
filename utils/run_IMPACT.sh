@@ -41,7 +41,12 @@ while IFS= read -r line; do
       sshpass -p "scope" scp radio_IMPACT.conf $line:/root/radio_api/
       sshpass -p "scope" scp ../traffic_gen.py $line:/root/traffic_gen/
       sshpass -p "scope" ssh $line "cd /root/radio_api && python3 scope_start.py --config-file radio_IMPACT.conf" &
-      sshpass -p "scope" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'model' ../../TRACTOR $line:/root/.
+      sshpass -p "scope" rsync -av -e ssh --exclude 'colosseum*' --exclude '.git' --exclude 'logs' --exclude 'utils/raw' --exclude 'model' ../../TRACTOR $line:/root/.
+      if [ $line = $gnb ]
+      then
+        echo "Letting the gNB start"
+        sleep 15
+      fi
       sleep 2
       clear -x
     fi
@@ -61,15 +66,14 @@ sshpass -p "scope" scp ../colosseum/radio_code/colosseum-scope-e2/run_odu.sh $gn
 sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/src/du_app/ && g++ readLastMetrics.cpp -o readLastMetrics.o"
 sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/ && sed -i 's/172.30.199.202/${IPCOL0}/' build_odu.sh && ./build_odu.sh clean" # && ./run_odu.sh
 
-sleep 10
+sleep 20
 clear -x
 # Start the ODU
 echo "Starting the ODU"
 gnome-terminal -- bash -c "sshpass -p 'scope' ssh -t $gnb 'cd /root/radio_code/colosseum-scope-e2/ && ./run_odu.sh'; bash" &
 #sshpass -p "scope" ssh $gnb "cd /root/radio_code/colosseum-scope-e2/ && ./run_odu.sh" &
 
-sleep 15
-clear -x
+sleep 20
 
 echo "Starting the Near-RT RIC"
 GNBID=`sshpass -p "ChangeMe" ssh $ric "docker logs e2term | grep -Eo 'gnb:[0-9]+-[0-9]+-[0-9]+' | tail -1"`
@@ -77,9 +81,10 @@ echo "The gnb ID is: $GNBID"
 sshpass -p "ChangeMe" ssh $ric "cd /root/radio_code/colosseum-near-rt-ric/setup-scripts && ./setup-sample-xapp.sh ${GNBID}"
 
 sleep 15
+clear -x
 
 echo "Copying files to the xApp"
-sshpass -p "ChangeMe" rsync -av -e ssh --exclude 'colosseum' --exclude '.git' --exclude 'logs/*UE/' --exclude 'utils/raw' --exclude 'raw' ../../TRACTOR $ric:/root/.
+sshpass -p "ChangeMe" rsync -av -e ssh --exclude 'colosseum*' --exclude '.git' --exclude 'logs/*UE/' --exclude 'utils/raw' --exclude 'raw' ../../TRACTOR $ric:/root/.
 sshpass -p "ChangeMe" ssh $ric 'docker cp /root/TRACTOR sample-xapp-24:/home/sample-xapp/.'
 sshpass -p "ChangeMe" ssh $ric 'docker exec sample-xapp-24 mv /home/sample-xapp/TRACTOR/utils/run_xapp_IMPACT.sh /home/sample-xapp/. && docker exec sample-xapp-24 chmod +x /home/sample-xapp/run_xapp_IMPACT.sh'
 
@@ -87,15 +92,15 @@ echo "Starting the xApp"
 #sshpass -p "ChangeMe" ssh $ric 'docker exec -i sample-xapp-24 bash -c "rm /home/*.log && cd /home/sample-xapp/ && ./run_xapp_IMPACT.sh"' &
 gnome-terminal -- bash -c "sshpass -p 'ChangeMe' ssh $ric 'docker exec -i sample-xapp-24 bash -c \"rm /home/*.log && cd /home/sample-xapp/ && ./run_xapp_IMPACT.sh\"'; bash" &
 
-sleep 10
+sleep 20
 echo "Starting the listener"
-sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9/--freq 1.020e9/' utils/uhd_rx_fft.sh"
+sshpass -p "sunflower" ssh $listener "sed -i 's/--freq 1\.010e9 --rate 1e6/--freq 1.020e9 --rate 2e7/' utils/uhd_rx_fft.sh"
 gnome-terminal -- bash -c "sshpass -p 'sunflower' ssh -t $listener 'sh utils/uhd_rx_fft.sh'; bash" &
 
-sleep 20
+sleep 30
 clear -x
 echo "Configured all SRNs"
-sleep 20
+sleep 30
 
 
 echo "Starting TGEN for demo UE"
@@ -410,9 +415,8 @@ sshpass -p "sunflower" ssh $interferer "kill -INT ${int_PID}"
 sshpass -p "scope" scp $gnb:/root/radio_code/scope_config/metrics/csv/101*_metrics.csv ./$out_dir/
 
 #TODO: verify copy log file from xApp
-sshpass - p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/*log* /root/."
-sshpass -p "ChangeMe" scp $ric:/root/*log* ./$out_dir/
+sshpass -p "ChangeMe" ssh $ric "docker cp sample-xapp-24:/home/xapp-logger.log /root/."
+sshpass -p "ChangeMe" scp $ric:/root/*.log ./$out_dir/
 
-echo "All tests complete"
 kill $(jobs -p)
-
+echo "All tests complete"
