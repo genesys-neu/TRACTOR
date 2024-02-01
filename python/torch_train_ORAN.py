@@ -24,7 +24,7 @@ proj_root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),os.pardir
 import sys
 sys.path.append(proj_root_dir)
 from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2
-from vit_pytorch import ViT
+from ORAN_models import megatron_ViT as ViT
 from visual_xapp_inference import plot_trace_class
 
 #ds_train = ORANTracesDataset('train_in__Trial1_Trial2_Trial3.pkl', 'train_lbl__Trial1_Trial2_Trial3.pkl')
@@ -213,19 +213,7 @@ def TRACTOR_model(Nclass, global_model, num_feats, slice_len, pos_enc=False):
                              custom_enc=True)
         loss_fn = nn.NLLLoss()
     elif global_model == ViT:
-        patch_Tsize = 4
-        model = global_model(
-            image_size=(slice_len, num_feats),
-            patch_size=(patch_Tsize, num_feats),
-            num_classes=Nclass,
-            channels=1,
-            dim=128,
-            heads=8,
-            depth=2,
-            mlp_dim=2048,
-            dropout=0.1,
-            emb_dropout=0.1
-        )
+        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
         # this loss fn is different (cause model doesn't have Softmax)
         loss_fn = nn.CrossEntropyLoss()
         # let's also add a transform function to add the channel axis for visual transformer in dataset samples

@@ -118,7 +118,8 @@ if __name__ == "__main__":
     args, _ = parser.parse_known_args()
 
     from ORAN_models import ConvNN, TransformerNN, TransformerNN_v2, TransformerNN_old
-    from ORAN_dataset import normalize_RAW_KPIs
+    from ORAN_models import megatron_ViT as ViT
+    from ORAN_dataset import normalize_RAW_KPIs, add_first_dim
 
     PATH = args.trace_path
     if PATH[-1] == '/':  # due to use of os.basename
@@ -144,7 +145,7 @@ if __name__ == "__main__":
             class_out = TRACTOR_inout['label']
 
             # construct raw input (note, we have to skip the first T - 1 samples
-            kpis_raw = TRACTOR_inout['input_raw']
+            kpis_raw = np.array(TRACTOR_inout['input_raw'])
 
             """
             for k in classmap.keys():
@@ -248,8 +249,7 @@ if __name__ == "__main__":
                 model_type = TransformerNN_v2
             elif args.model_type == 'ViT':
                 # transformer = ViT
-                print("Transformer type " + args.transformer + " is not yet supported.")
-                exit(-1)
+                model_type = ViT
             elif args.model_type == 'CNN':
                 model_type = ConvNN
 
@@ -283,10 +283,9 @@ if __name__ == "__main__":
             model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
         elif model_type == ConvNN:
             model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
-        else:
-            # TODO
-            print("ViT/other model is not yet supported. Aborting.")
-            exit(-1)
+        elif model_type == ViT:
+            patch_Tsize = 4
+            model = model_type(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
 
         if torch.cuda.is_available():
             device = torch.device("cuda")
@@ -331,7 +330,7 @@ if __name__ == "__main__":
 
                     for f in range(kpi_filt.shape[1]):
                         if np.any(kpi_filt[:, f] > colsparams[f]['max']) or np.any(kpi_filt[:, f] < colsparams[f]['min']):
-                            # print("Clipping ", colsparams[c]['min'], "< x <", colsparams[c]['max'])
+                            # print("Clipping ", colsparams[f]['min'], "< x <", colsparams[f]['max'])
                             kpi_filt[:, f] = np.clip(kpi_filt[:, f], colsparams[f]['min'], colsparams[f]['max'])
 
                         # print('Un-normalized vector'+repr(kpi_filt[:, f]))
@@ -341,7 +340,10 @@ if __name__ == "__main__":
 
                     input = torch.Tensor(kpi_filt[np.newaxis, :, :])
                     input = input.to(device)  # transfer input data to GPU
-                    pred = model(input)
+                    if model_type == ViT:
+                        pred = model(add_first_dim(input))
+                    else:
+                        pred = model(input)
                     class_ix = pred.argmax(1)
                     co = int(class_ix.cpu().numpy()[0])
                     output_list_y.append(co)
@@ -397,7 +399,9 @@ if __name__ == "__main__":
                             # plt.show()
                             if co == classmap['ctrl']:
                                 num_verified_ctrl += 1  # classifier and heuristic for control traffic agrees
-                                continue  # skip this sample
+                                num_correct += 1
+                                num_samples += 1
+                                continue  # skip to next iteration
 
                     num_correct += 1 if (co == correct_class) else 0
                     num_samples += 1

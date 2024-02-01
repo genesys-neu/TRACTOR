@@ -4,11 +4,11 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import math
-
+from vit_pytorch import ViT
 
 # Define model
 class ConvNN(nn.Module):
-    def __init__(self, numChannels=1, slice_len=4, num_feats=18, classes=3):
+    def __init__(self, numChannels=1, slice_len=4, num_feats=17, classes=4):
         super(ConvNN, self).__init__()
 
         self.numChannels = numChannels
@@ -61,7 +61,7 @@ class ConvNN(nn.Module):
 
 
 class TransformerNN(nn.Module):
-    def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
+    def __init__(self, classes: int = 4, num_feats: int = 17, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
                  dropout: float = 0.2, use_pos: bool = False, custom_enc: bool = False):
         super(TransformerNN, self).__init__()
 
@@ -112,7 +112,7 @@ class TransformerNN(nn.Module):
 
 
 class TransformerNN_v2(nn.Module):
-    def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
+    def __init__(self, classes: int = 4, num_feats: int = 17, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
                  dropout: float = 0.2, use_pos: bool = False):
         super(TransformerNN_v2, self).__init__()
 
@@ -223,7 +223,7 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerNN_old(nn.Module):
-    def __init__(self, classes: int = 4, num_feats: int = 18, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
+    def __init__(self, classes: int = 4, num_feats: int = 17, slice_len: int = 32, nhead: int = 1, nlayers: int = 2,
                  dropout: float = 0.2, use_pos: bool = False):
         super(TransformerNN_old, self).__init__()
         self.norm = nn.LayerNorm(num_feats)
@@ -264,3 +264,19 @@ class TransformerNN_old(nn.Module):
         output = self.classifier(pooler)
         output = self.logSoftmax(output)
         return output
+
+class megatron_ViT(ViT):
+    def __init__(self, classes: int = 4,  num_feats: int = 17, slice_len: int = 32):
+        patch_Tsize = 4
+        super(megatron_ViT, self).__init__(
+            image_size=(slice_len, num_feats),
+            patch_size=(patch_Tsize, num_feats),
+            num_classes=classes,
+            channels=1,
+            dim=256,
+            heads=8,
+            depth=2,
+            mlp_dim=2048,
+            dropout=0.25,
+            emb_dropout=0.25
+        )
