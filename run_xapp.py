@@ -149,6 +149,7 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
                     np_kpi = np.array(kpi)
                     # let's normalize each columns based on the params derived while training
                     assert (np_kpi.shape[1] == len(list(map_feat2KPI.keys()))), "Check that filtered features has same size of mapped KPIs for normalization"
+                    """
                     for f in range(np_kpi.shape[1]):
                         c = map_feat2KPI[f]
                         print('***** ' + colsparams[c]['name']+' ('+str(c)+') *****')
@@ -160,6 +161,17 @@ def main(model_type, torch_model_path, norm_param_path, Nclass, all_feats_raw=31
                         np_kpi[:, f] = (np_kpi[:, f] - colsparams[c]['min']) / (
                                     colsparams[c]['max'] - colsparams[c]['min'])
                         print('Normalized vector: '+repr(np_kpi[:, f]))
+                    """
+                    for f in range(np_kpi.shape[1]):
+                        if np.any(np_kpi[:, f] > colsparams[f]['max']) or np.any(np_kpi[:, f] < colsparams[f]['min']):
+                            print("Clipping ", colsparams[f]['min'], "< x <", colsparams[f]['max'])
+                            np_kpi[:, f] = np.clip(np_kpi[:, f], colsparams[f]['min'], colsparams[f]['max'])
+
+                        print('Un-normalized vector'+repr(np_kpi[:, f]))
+                        np_kpi[:, f] = (np_kpi[:, f] - colsparams[f]['min']) / (
+                                    colsparams[f]['max'] - colsparams[f]['min'])
+                        print('Normalized vector: '+repr(np_kpi[:, f]))
+
                     # and then pass it to our model as a torch tensor
                     t_kpi = torch.Tensor(np.expand_dims(np_kpi, axis=0)).to(device)
                     try:
