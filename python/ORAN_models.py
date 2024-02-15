@@ -4,7 +4,7 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import math
-from vit_pytorch import ViT
+#from vit_pytorch import ViT
 
 # Define model
 class ConvNN(nn.Module):
@@ -265,6 +265,7 @@ class TransformerNN_old(nn.Module):
         output = self.logSoftmax(output)
         return output
 
+"""
 class megatron_ViT(ViT):
     def __init__(self, classes: int = 4,  num_feats: int = 17, slice_len: int = 32):
         patch_Tsize = 4
@@ -280,3 +281,4 @@ class megatron_ViT(ViT):
             dropout=0.25,
             emb_dropout=0.25
         )
+"""
