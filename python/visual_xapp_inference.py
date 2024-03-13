@@ -326,7 +326,7 @@ if __name__ == "__main__":
                 if t + args.slicelen < kpis_raw.shape[0]:
                     input_sample = kpis[t+filt_kpi_offset:t+filt_kpi_offset + args.slicelen]
                     input_sample_raw = np.squeeze( kpis_raw[t:t + args.slicelen] )
-                    input_sample_raw=input_sample_raw[0,:,:] # Fixes dimensionality issue (Feel free to remove later)
+                    #input_sample_raw=input_sample_raw[0,:,:] # Fixes dimensionality issue (Feel free to remove later)
                     kpi_filt = input_sample_raw[:,indexes_to_keep]
 
                     for f in range(kpi_filt.shape[1]):
