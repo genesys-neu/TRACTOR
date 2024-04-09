@@ -53,13 +53,26 @@ TRAINLOGDIR=train_log6
 
 l=16 # slice length
 
-python ORAN_dataset.py --trials Trial1 Trial2 Trial3 Trial4 Trial5 Trial6 --mode emuc --slicelen $l --data_type singleUE_raw --filemarker ${FILEMARKER} --cp_path ./${TRAINLOGDIR}/ --exp_name ICNC__slice${l}__${FILEMARKER} --already_gen --ds_pkl_paths ../logs/SingleUE/prev_experiments/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice${l}.pkl --normp_pkl ../logs/SingleUE/prev_experiments/cols_maxmin__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__singleUE_raw_noTs_prev_experiments.pkl
+python ORAN_dataset.py --trials Trial1 Trial2 Trial3 Trial4 Trial5 Trial6 --mode emuc --slicelen $l --data_type singleUE_raw --filemarker ${FILEMARKER} --cp_path ./${TRAINLOGDIR}/ --exp_name ICNC__slice${l}__${FILEMARKER}${SUFFIX} --already_gen --ds_pkl_paths ../logs/SingleUE/prev_experiments/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice${l}.pkl --normp_pkl ../logs/SingleUE/prev_experiments/cols_maxmin__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__singleUE_raw_noTs_prev_experiments.pkl
 ```
+### Single UE (raw) traces (newly collected datset, aka `Trial7`)
+[`Trial7`](../logs/SingleUE/Trial7/Raw) consists of all the traces in Trials 1-6 re-processed through SCOPE/Colosseum in a uniform configuration (i.e. single UE allocated within a single traffic slice assigned with all available Resource Blocks (RBs)). This was done to provide a more uniform set of input features and prevent the classifier from associating specific testbed configurations to certain traffic types. Note that this folder also contains the test traces previously used for [TRACTOR](https://arxiv.org/abs/2312.07896) and [MEGATRON](http://www.conf-icnc.org/2024/papers/p1054-belgiovine.pdf) papers (`*_04_10.csv`) that in this case are re-used for training/validation. 
+
+In order to pre-process the dataset using this data, run the following command:
+```
+FILEMARKER=newcollect
+SUFFIX=_meanthr
+TRAINLOGDIR=train_log10
+
+l=16 # slice length
+python ORAN_dataset.py --trials Trial7 --mode emuc --slicelen $l --data_type singleUE_raw --drop_colnames Timestamp num_ues IMSI RNTI slicing_enabled slice_id slice_prb scheduling_policy --cp_path ./${TRAINLOGDIR}/ --filemarker trial7__slice${l}__${FILEMARKER}${SUFFIX}
+```
+
 ## Model Training 
 The command [torch_train_ORAN.py](./torch_train_ORAN.py) it's used to train a given model using the dataset files just generated for this experiment. Possible models are:
 - (default) Tansformer V1 (num. attention head `nhead = 1`, no CLS token is used)
 - Transformer V2 (same as V1, but with CLS token implementation)
-- CNN (see [TRACTOR](todo_add_reference) paper)
+- CNN (see [TRACTOR](https://arxiv.org/abs/2312.07896) paper)
 
 ```
 usage: torch_train_ORAN.py [-h] --ds_file DS_FILE [DS_FILE ...] [--ds_path DS_PATH] [--isNorm] [--test {val,traces}] [--relabel_test] [--relabel_train] [--cp_path CP_PATH] [--exp_name EXP_NAME] [--norm_param_path NORM_PARAM_PATH]
@@ -99,7 +112,7 @@ Now train with basic Transformer (no positional autoencoder, 1 head, no CLS toke
 ```
     python torch_train_ORAN.py --ds_file ../logs/SingleUE/prev_experiments/dataset__emuc__Trial1_Trial2_Trial3_Trial4_Trial5_Trial6__slice${l}__globalnorm.pkl --isNorm --ds_path ../logs --cp_path ./${TRAINLOGDIR}/ --norm_param_path ../logs/global__cols_maxmin__${FILEMARKER}_slice${l}.pkl --exp_name ICNC__slice${l}__${FILEMARKER}${SUFFIX} --transformer v1 --relabel_train
 ```
-Note that `--relabel_train` applies relabeling of input data as explained on [MEGATRON](TODO_add_citation) paper. If you don't want to apply relabeling, simply run the same command without the `--relabel_train` flag.
+Note that `--relabel_train` applies relabeling of input data as explained on [MEGATRON](http://www.conf-icnc.org/2024/papers/p1054-belgiovine.pdf) paper. If you don't want to apply relabeling, simply run the same command without the `--relabel_train` flag.
 
 Finally, generate the confusion matrix for the trained model using validation data:
 ```
