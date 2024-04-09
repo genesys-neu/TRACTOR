@@ -975,6 +975,7 @@ if __name__ == "__main__":
                 # we subtract 1 standard deviation from its mean and use that as threshold
                 thr_val = this_mean - (1 * this_std)
 
+
             common_normp['info']['norm_dist'][cl]['thr'] = thr_val # save threshold value
             print("Threshold class ", cl, ":", thr_val)
             if isPlot:
@@ -997,13 +998,13 @@ if __name__ == "__main__":
             plt.xlabel('Euclidean distance from mean ctrl template')
             plt.ylabel('Probability density')
             plt.axvline(x=min_threshold, ls='-', c='gray')
-            plt.savefig(os.path.join(logdir, 'normDiff_distr.png'))
+            plt.savefig(os.path.join(logdir, 'normDiff_distr_slice'+str(args.slicelen)+'.png'))
             plt.clf()
 
         if isPlot:
             plt.imshow(mean_ctrl_sample)
             plt.colorbar()
-            plt.savefig(os.path.join(logdir, 'mean_ctrl_sample.png'))
+            plt.savefig(os.path.join(logdir, 'mean_ctrl_sample_slice'+str(args.slicelen)+'.png'))
             plt.clf()
             #plt.imshow(std_ctrl_sample)
             #plt.colorbar()
@@ -1030,7 +1031,7 @@ if __name__ == "__main__":
         print("Unique labels", unique_labels, " count", unique_counts)
         if isPlot:
             plt.bar(unique_labels, unique_counts, tick_label=unique_labels)
-            plt.savefig(os.path.join(logdir, 'num_relabel_noctrl.png'))
+            plt.savefig(os.path.join(logdir, 'num_relabel_noctrl_slice'+str(args.slicelen)+'.png'))
             plt.clf()
 
         sample_plots = all_sample_noctrl[possible_ctrl_ixs].numpy()
