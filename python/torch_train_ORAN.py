@@ -122,7 +122,7 @@ def train_func(config: Dict):
         train_dataloader = train.torch.prepare_data_loader(train_dataloader)
         test_dataloader = train.torch.prepare_data_loader(test_dataloader)
 
-    model, loss_fn = TRACTOR_model(Nclass, global_model, num_feats, slice_len, pos_enc)
+    model, loss_fn = TRACTOR_model(Nclass, global_model, num_feats, slice_len, pos_enc, dropout=config['dropout'])
 
     if useRay:
         model = train.torch.prepare_model(model)
@@ -206,14 +206,14 @@ def train_func(config: Dict):
     return loss_results
 
 
-def TRACTOR_model(Nclass, global_model, num_feats, slice_len, pos_enc=False):
+def TRACTOR_model(Nclass, global_model, num_feats, slice_len, pos_enc=False, dropout=0.25):
     # Create model.
     if global_model in [TransformerNN, TransformerNN_v2]:
         model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats, use_pos=pos_enc, nhead=1,
                              custom_enc=True)
         loss_fn = nn.NLLLoss()
     elif global_model == ViT:
-        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats)
+        model = global_model(classes=Nclass, slice_len=slice_len, num_feats=num_feats, dropout=dropout)
         # this loss fn is different (cause model doesn't have Softmax)
         loss_fn = nn.CrossEntropyLoss()
         # let's also add a transform function to add the channel axis for visual transformer in dataset samples
@@ -309,6 +309,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp_name", default='', help="Name of this experiment")
     parser.add_argument("--norm_param_path", default="", help="Normalization parameters path.")
     parser.add_argument("--transformer", default=None, choices=['v1', 'v2', 'ViT'], help="Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)")
+    parser.add_argument("--dropout", default=0.25, type=float, help="Only used for Visual Transformer (ViT)")
     parser.add_argument("--pos_enc",  action="store_true", default=False, help="Use positional encoder (only applied to transformer arch)")
     parser.add_argument("--patience", type=int, default=30, help="Num of epochs to wait before interrupting training with early stopping")
     parser.add_argument("--lrmax", type=float, default=1e-3,help="Initial learning rate ")
@@ -356,15 +357,20 @@ if __name__ == "__main__":
     train_config['logdir'] = logdir
     train_config['pos_enc'] = args.pos_enc
     train_config['patience'] = args.patience
-
+    train_config['dropout'] = args.dropout
     if args.transformer is None:
         train_config['global_model'] = ConvNN
     else:
         train_config['global_model'] = transformer
     train_config['model_postfix'] = 'trans_' + args.transformer if args.transformer is not None else 'cnn'
 
-    device = torch.device("cuda")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     train_config['device'] = device
+    print("CUDA is available:", torch.cuda.is_available(), " Device:", device)
+
 
     train_config['lr'] = args.lrmax
     train_config['lrmin'] = args.lrmin

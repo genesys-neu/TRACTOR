@@ -267,7 +267,7 @@ class TransformerNN_old(nn.Module):
 
 
 class megatron_ViT(ViT):
-    def __init__(self, classes: int = 4,  num_feats: int = 17, slice_len: int = 32):
+    def __init__(self, classes: int = 4,  num_feats: int = 17, slice_len: int = 32, dropout=0.25):
         patch_Tsize = 4
         super(megatron_ViT, self).__init__(
             image_size=(slice_len, num_feats),
@@ -278,7 +278,7 @@ class megatron_ViT(ViT):
             heads=8,
             depth=2,
             mlp_dim=2048,
-            dropout=0.25,
-            emb_dropout=0.25
+            dropout=dropout,
+            emb_dropout=dropout
         )
 
