@@ -149,9 +149,15 @@ optional arguments:
   --chZeros             [Deprecated] At test time, don't count the occurrences of ctrl class
 ```
 
+It is possible to loop this function over all test traces in a folder with the following shell command:
+```
+for i in `ls <path-to-test-folder>/*.csv`; do python visual_xapp_inference.py --trace_path $i --slicelen $l --model_path <path-to-model-.pt> --norm_param_path <path-to-norm-param-.pkl> --mode inference_offline --CTRLcheck --model_type <model-type> --dir_postfix <str-appended-to-output-dir>; done
+```
+
 # TODO: next steps
 - [x] Complete Visual Transformer support.
 - [ ] Add multiple attention heads to V1 and V2
 - [x] Re-test pipeline starting from CSV files (both Single and Multi UE)
 - [x] Finish description for running with pre-recorded Colosseum traces
+- [ ] Add example output for offline inference output
 - [x] Add references to papers
