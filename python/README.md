@@ -1,5 +1,5 @@
-# Training TRACTOR models
-All train-related scripts are in [python/](./) directory.
+# Training and testing TRACTOR models
+All train-related scripts are in [`python/`](./) directory.
 ```
 # from top repo directory
 cd python/
@@ -7,7 +7,7 @@ cd python/
 ## Generate sliced datasets
 IMPORTANT: this code assumes that all CSV files have the same header/columns names and order.
 
-First we use [ORAN_dataset.py](./ORAN_dataset.py) to generate the slice mapping from KPI logs:
+First we use [`ORAN_dataset.py`](./ORAN_dataset.py) to generate the slice mapping from KPI logs:
 ```
 $ python ORAN_dataset.py --help
 usage: ORAN_dataset.py [-h] [--trials [TRIALS ...]] [--trials_multi [TRIALS_MULTI ...]] [--filemarker FILEMARKER] [--slicelen SLICELEN] [--ds_path DS_PATH] [--check_zeros] [--mode {emu,emuc,co}]
@@ -69,10 +69,11 @@ python ORAN_dataset.py --trials Trial7 --mode emuc --slicelen $l --data_type sin
 ```
 
 ## Model Training 
-The command [torch_train_ORAN.py](./torch_train_ORAN.py) it's used to train a given model using the dataset files just generated for this experiment. Possible models are:
+The command [`torch_train_ORAN.py`](./torch_train_ORAN.py) it's used to train a given model using the dataset files just generated for this experiment. Possible models are:
 - (default) Tansformer V1 (num. attention head `nhead = 1`, no CLS token is used)
 - Transformer V2 (same as V1, but with CLS token implementation)
 - CNN (see [TRACTOR](https://arxiv.org/abs/2312.07896) paper)
+- Visual Transformer (ViT) with pre-defined configuration (see `megatron_ViT` class in [`ORAN_models.py`](./ORAN_models.py))
 
 ```
 usage: torch_train_ORAN.py [-h] --ds_file DS_FILE [DS_FILE ...] [--ds_path DS_PATH] [--isNorm] [--test {val,traces}] [--relabel_test] [--relabel_train] [--cp_path CP_PATH] [--exp_name EXP_NAME] [--norm_param_path NORM_PARAM_PATH]
