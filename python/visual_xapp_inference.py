@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--trace_path", required=True, help="Path containing the classifier output files for re-played traffic traces")
-    parser.add_argument("--mode", choices=['pre-comp', 'inference', 'inference_offline'], default='pre-comp', help="Specify the type of file format we are trying to read.")
+    parser.add_argument("--mode", choices=['pre-comp', 'inference', 'inference_offline'], default='inference_offline', help="Specify the type of file format we are trying to read.")
     parser.add_argument("--slicelen", choices=[4, 8, 16, 32, 64], type=int, default=32, help="Specify the slicelen to determine the classifier to load")
     parser.add_argument("--model_path", help="Path to TRACTOR model to load."  )
     parser.add_argument("--norm_param_path", default="", help="Normalization parameters path.")
