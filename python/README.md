@@ -150,8 +150,8 @@ optional arguments:
 ```
 
 # TODO: next steps
-[x] Complete Visual Transformer support
-[] Add multiple attention heads to V1 and V2
-[x] Re-test pipeline starting from CSV files (both Single and Multi UE)
-[x] Finish description for running with pre-recorded Colosseum traces
-[x] Add references to papers
+- [x] Complete Visual Transformer support.
+- [ ] Add multiple attention heads to V1 and V2
+- [x] Re-test pipeline starting from CSV files (both Single and Multi UE)
+- [x] Finish description for running with pre-recorded Colosseum traces
+- [x] Add references to papers
