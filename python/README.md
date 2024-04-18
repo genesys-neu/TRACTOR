@@ -119,11 +119,39 @@ Finally, generate the confusion matrix for the trained model using validation da
 python confusion_matrix.py --logdir ./${TRAINLOGDIR}/ICNC__slice${l}__${FILEMARKER}${SUFFIX}/
 ```
 # Running model on pre-recorded KPI data
-TODO..
+If Colosseum traces for test data are available, it is possible to run (`visual_xapp_inference.py`)[./visual_xapp_inference.py] in order to obtain the accuracy of prediction of a certain trace. Note that CSV traces should contain a single traffic type in it and have the keyword relative to the traffic type at the beginning of the file name (i.e. `embb_*.csv`, `mmtc_*.csv` or `urllc_*.`) in order to compare classifier's results using the correct traffic type. To deal with *idle* portion of the traffic, the same CTRL/idle mean template and threshold mechanism used for filtering the training dataset (see description of `--relabel_train` above) is used to detect whether the classifier output is validated or not through the proposed filtering heuristic: if classifier's output is equal to class `3` (i.e. CTRL/idle) and the sample passes the heuristic test, we validate the classifier decision and consider the output as correctly classified as `idle` traffic. 
+
+```
+usage: visual_xapp_inference.py [-h] --trace_path TRACE_PATH [--mode {pre-comp,inference,inference_offline}]
+                                [--slicelen {4,8,16,32,64}] [--model_path MODEL_PATH] [--norm_param_path NORM_PARAM_PATH]
+                                [--model_type {CNN,Tv1,Tv1_old,Tv2,ViT}] [--Nclasses NCLASSES] [--dir_postfix DIR_POSTFIX]
+                                [--CTRLcheck] [--chZeros]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --trace_path TRACE_PATH
+                        Path containing the classifier output files for re-played traffic traces
+  --mode {pre-comp,inference,inference_offline}
+                        Specify the type of file format we are trying to read.
+  --slicelen {4,8,16,32,64}
+                        Specify the slicelen to determine the classifier to load
+  --model_path MODEL_PATH
+                        Path to TRACTOR model to load.
+  --norm_param_path NORM_PARAM_PATH
+                        Normalization parameters path.
+  --model_type {CNN,Tv1,Tv1_old,Tv2,ViT}
+                        Use Transformer based model instead of CNN, choose v1 or v2 ([CLS] token)
+  --Nclasses NCLASSES   Used to initialize the model
+  --dir_postfix DIR_POSTFIX
+                        This is appended to the name of the output folder for images and text
+  --CTRLcheck           At test time (inference), it will compare the sample with CTRL template to determine if its a correct CTRL
+                        sample
+  --chZeros             [Deprecated] At test time, don't count the occurrences of ctrl class
+```
 
 # TODO: next steps
-- Complete Visual Transformer support
-- Add multiple attention heads to V1 and V2
-- Re-test pipeline starting from CSV files (both Single and Multi UE)
-- Finish description for running with pre-recorded Colosseum traces
-- Add references to papers
+[x] Complete Visual Transformer support
+[] Add multiple attention heads to V1 and V2
+[x] Re-test pipeline starting from CSV files (both Single and Multi UE)
+[x] Finish description for running with pre-recorded Colosseum traces
+[x] Add references to papers
