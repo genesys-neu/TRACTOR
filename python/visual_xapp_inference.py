@@ -383,7 +383,10 @@ if __name__ == "__main__":
                                                          indexes_to_keep=indexes_to_keep,
                                                          doPrint=False)
 
-            inputs_t = torch.tensor(inputs_filt_norm[:, np.newaxis, :, :], dtype=torch.float32)
+            if model_type == ViT:
+                inputs_t = torch.tensor(inputs_filt_norm[:, np.newaxis, :, :], dtype=torch.float32)
+            else:
+                inputs_t = torch.tensor(inputs_filt_norm, dtype=torch.float32)
             inputs_t = inputs_t.to(device)
 
             pred = model(inputs_t)
