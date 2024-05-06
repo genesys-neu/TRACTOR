@@ -303,8 +303,7 @@ if __name__ == "__main__":
     parser.add_argument("--ds_path", default="../logs/", help="Specify path where dataset files are stored")
     parser.add_argument("--isNorm", default=False, action='store_true', help="Specify to load the normalized dataset." )
     parser.add_argument("--test", default=None, choices=['val', 'traces'], help="Testing the model") # TODO visualize capture and then perform classification after loading model
-    parser.add_argument("--relabel_test", action="store_true", default=False, help="Perform ctrl label correction during testing time") 
-    parser.add_argument("--relabel_train", action="store_true", default=False, help="Perform ctrl label correction during training time" )
+    parser.add_argument("--relabel_train", action="store_true", default=False, help="Perform CTRL label correction on input dataset (pkl)" )
     parser.add_argument("--cp_path", help='Path to save/load checkpoint and training logs')
     parser.add_argument("--exp_name", default='', help="Name of this experiment")
     parser.add_argument("--norm_param_path", default="", help="Normalization parameters path.")
@@ -387,7 +386,7 @@ if __name__ == "__main__":
         #debug_train_func(train_config)
     else: 
         cp_path = args.cp_path
-        check_zeros = args.relabel_test
+        check_zeros = args.relabel_train
 
         global_model = train_config['global_model']
         model, loss_fn = TRACTOR_model(Nclass, global_model, train_config['num_feats'], train_config['slice_len'], train_config['pos_enc'])
@@ -440,6 +439,9 @@ if __name__ == "__main__":
                 plt.show()
         """
         if args.test == 'traces':
+            # TODO either remove or adapt this code [DEPRECATED]
+            print("[DEPRECATED] args.test == 'traces'. Aborting.")
+            exit()
             # load normalization parameters
             colsparam_dict = pickle.load(open(args.norm_param_path, 'rb'))
             # load and normalize a trace input
@@ -510,8 +512,8 @@ if __name__ == "__main__":
             sn.set(font_scale=1.4)  # for label size
             sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b_r", as_cmap=True), annot_kws={"size": 16}, fmt='.1f')  # font size
             plt.show()
-            name_suffix = '_ctrlcorrected' if check_zeros else ''
-            add_ctrl = '.ctrl' if ctrl_flag else ''
+            name_suffix = '_CTRLrelabel' if check_zeros else ''
+            add_ctrl = '.ctrl' if check_zeros else ''
             plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}.pdf")
             plt.clf()
             print('-------------------------------------------')
@@ -557,8 +559,8 @@ if __name__ == "__main__":
             sn.set(font_scale=1.8)  # for label size
             sn.heatmap(df_cm, vmin=0, vmax=100, annot=True, cmap=sn.color_palette("light:b", as_cmap=True), annot_kws={"size": 25}, fmt='.1f')  # font size
             plt.show()
-            add_ctrl = '.ctrl' if ctrl_flag else ''
-            name_suffix = '_ctrlcorrected' if args.ds_file.split('_')[-2] == 'ctrlcorrected' else ''
+            name_suffix = '_CTRLrelabel' if check_zeros else ''
+            add_ctrl = '.ctrl' if check_zeros else ''
             plt.savefig(f"Results_slice_{ds_info['slice_len']}.{train_config['model_postfix']}{add_ctrl}{name_suffix}_test.pdf")
             plt.clf()
             print('-------------------------------------------')
