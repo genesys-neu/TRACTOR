@@ -1,4 +1,13 @@
 # TRACTOR: Traffic Analysis and Classification Tool
+This code base is used in the following two papers. If you use this code, please cite one or both of these.
+
+All of the dataset generation and toolsets, along with the CNN models, are described in detail in the TRACTOR paper:
+- J. Groen, M. Belgiovine, U. Utku, B. Kim, and K. R. Chowdhury, “TRACTOR: Traffic Analysis and Classification Tool for Open RAN,” IEEE International Conference on Communications (ICC), June 2024.
+
+The TRANSFORMER model in this repository is described in the MEGATRON paper:
+- M. Belgiovine, J. Gu, J. Groen, U. Demir, and K. R. Chowdhury, “MEGATRON: Machine Learning in 5G with Analysis of Traffic in Open Radio Access Networks,” International Conference on Computing, Networking and Communications (ICNC), Feb. 2024.
+
+# OVERVIEW
 We introduce TRACTOR: Traffic Analysis and Classification Tool for Open RAN. This classifier leverages the open interfaces of O-RAN to collect KPIs from the gNB. These KPIs, which do not contain any user-identifiable information, are used as inputs to ML classifiers in the near-RT RIC to classify user traffic.
 
 This repository is organized as follows:
@@ -95,4 +104,6 @@ where `<num seconds>` is the number of seconds to run for the traffic generator 
 
 ### Other Utilities 
 Additional utilities are found in the /utils directory. These utilities include utilizing multiple UEs, generating interference, generating malicious traffic, and enabling IPsec on the E2 interface.
+
+
 
