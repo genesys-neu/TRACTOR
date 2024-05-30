@@ -24,7 +24,11 @@ Use the `webinar-interactive-v1` SRN for the interfering node.
 You can adjust the interference by editing ```uhd_tx_tone.sh```.
 
 ## Malicious UE traffic
-There are several scripts to generate malicious UE traffic. 
+There are several scripts to generate malicious UE traffic. These scripts were used to generate the data set used in the paper:
+
+- Y. Rumesh, D. Attanayaka, P. Porambage, J.E. Pinola, J.B. Groen, and K. Chowdhury, “Federated Learning for Anomaly Detection in Open RAN: Security Architecture Within a Digital Twin,” 2024 EuCNC & 6G Summit - NET, March 2024.
+
+Please consider citing this paper if you use these scripts.
 
 ```interference_tgen_p.sh``` represents a DoS attack by generating uplink packets with poisson distribution timing and gaussian distribution packet size.
 
