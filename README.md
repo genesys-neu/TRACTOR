@@ -1,5 +1,5 @@
 # TRACTOR: Traffic Analysis and Classification Tool
-This code base is used in the following two papers. If you use this code, please consider citing one or both of these.
+This code base is released under the MIT License (see [LICENSE](./LICENSE)). This code base is used in the following two papers. If you use this code, please consider citing one or both of these.
 
 All of the dataset generation and toolsets, along with the CNN models, are described in detail in the TRACTOR paper:
 - J. Groen, M. Belgiovine, U. Utku, B. Kim, and K. R. Chowdhury, “TRACTOR: Traffic Analysis and Classification Tool for Open RAN,” IEEE International Conference on Communications (ICC), June 2024.
