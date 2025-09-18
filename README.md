@@ -106,4 +106,6 @@ where `<num seconds>` is the number of seconds to run for the traffic generator 
 Additional utilities are found in the /utils directory. These utilities include utilizing multiple UEs, generating interference, generating malicious traffic, and enabling IPsec on the E2 interface.
 
 
+## License
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
 
